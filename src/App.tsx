@@ -273,6 +273,71 @@ function App() {
   ] = useState(false);
 
   /* =======================================================
+     RECUPERAÇÃO DE SENHA
+  ======================================================= */
+
+  const [
+    showForgotPassword,
+    setShowForgotPassword,
+  ] = useState(false);
+
+  const [
+    recoveryEmail,
+    setRecoveryEmail,
+  ] = useState("");
+
+  const [
+    recoveryLoading,
+    setRecoveryLoading,
+  ] = useState(false);
+
+  const [
+    recoveryError,
+    setRecoveryError,
+  ] = useState("");
+
+  const [
+    recoverySuccess,
+    setRecoverySuccess,
+  ] = useState("");
+
+  const [
+    passwordRecoveryMode,
+    setPasswordRecoveryMode,
+  ] = useState(() => {
+    const hash =
+      window.location.hash.toLowerCase();
+
+    const search =
+      window.location.search.toLowerCase();
+
+    return (
+      hash.includes("type=recovery") ||
+      search.includes("type=recovery")
+    );
+  });
+
+  const [
+    newPassword,
+    setNewPassword,
+  ] = useState("");
+
+  const [
+    confirmNewPassword,
+    setConfirmNewPassword,
+  ] = useState("");
+
+  const [
+    newPasswordLoading,
+    setNewPasswordLoading,
+  ] = useState(false);
+
+  const [
+    newPasswordError,
+    setNewPasswordError,
+  ] = useState("");
+
+  /* =======================================================
      DADOS DO APP
   ======================================================= */
 
@@ -494,7 +559,7 @@ function App() {
   }
 
   /* =======================================================
-     VERIFICAR SESSÃO
+     VERIFICAR SESSÃO / RECUPERAÇÃO
   ======================================================= */
 
   useEffect(() => {
@@ -523,7 +588,10 @@ function App() {
 
       setAuthUser(user);
 
-      if (user) {
+      if (
+        user &&
+        !passwordRecoveryMode
+      ) {
         await loadProfile(user);
       }
 
@@ -538,15 +606,44 @@ function App() {
       data: { subscription },
     } =
       supabase.auth.onAuthStateChange(
-        (_event, session) => {
+        (event, session) => {
           const user =
             session?.user || null;
 
+          if (
+            event ===
+            "PASSWORD_RECOVERY"
+          ) {
+            setPasswordRecoveryMode(
+              true
+            );
+
+            setAuthUser(user);
+            setCurrentUser(null);
+
+            setShowForgotPassword(
+              false
+            );
+
+            setNewPassword("");
+            setConfirmNewPassword("");
+            setNewPasswordError("");
+
+            setAuthChecking(false);
+
+            return;
+          }
+
           setAuthUser(user);
 
-          if (user) {
+          if (
+            user &&
+            !passwordRecoveryMode
+          ) {
             void loadProfile(user);
-          } else {
+          }
+
+          if (!user) {
             setCurrentUser(null);
           }
 
@@ -579,6 +676,10 @@ function App() {
 
     setAuthPassword("");
     setAuthConfirmPassword("");
+
+    setShowForgotPassword(
+      false
+    );
   }
 
   async function handleRegister(
@@ -839,6 +940,176 @@ function App() {
     );
   }
 
+  /* =======================================================
+     ESQUECI MINHA SENHA
+  ======================================================= */
+
+  function openForgotPassword() {
+    setRecoveryEmail(
+      authEmail.trim()
+    );
+
+    setRecoveryError("");
+    setRecoverySuccess("");
+
+    setShowForgotPassword(
+      true
+    );
+  }
+
+  function closeForgotPassword() {
+    setShowForgotPassword(
+      false
+    );
+
+    setRecoveryError("");
+    setRecoverySuccess("");
+  }
+
+  async function handleForgotPassword(
+    event: FormEvent
+  ) {
+    event.preventDefault();
+
+    const email =
+      recoveryEmail
+        .trim()
+        .toLowerCase();
+
+    setRecoveryError("");
+    setRecoverySuccess("");
+
+    if (
+      !email ||
+      !email.includes("@")
+    ) {
+      setRecoveryError(
+        "Digite um e-mail válido."
+      );
+
+      return;
+    }
+
+    setRecoveryLoading(
+      true
+    );
+
+    const { error } =
+      await supabase.auth
+        .resetPasswordForEmail(
+          email,
+          {
+            redirectTo:
+              window.location.origin,
+          }
+        );
+
+    setRecoveryLoading(
+      false
+    );
+
+    if (error) {
+      setRecoveryError(
+        error.message
+      );
+
+      return;
+    }
+
+    setRecoverySuccess(
+      "Se existir uma conta com esse e-mail, enviaremos um link para redefinir sua senha. Verifique também a pasta de spam."
+    );
+  }
+
+  /* =======================================================
+     DEFINIR NOVA SENHA
+  ======================================================= */
+
+  async function handleNewPassword(
+    event: FormEvent
+  ) {
+    event.preventDefault();
+
+    setNewPasswordError("");
+
+    if (
+      newPassword.length < 6
+    ) {
+      setNewPasswordError(
+        "A nova senha precisa ter pelo menos 6 caracteres."
+      );
+
+      return;
+    }
+
+    if (
+      newPassword !==
+      confirmNewPassword
+    ) {
+      setNewPasswordError(
+        "As senhas não são iguais."
+      );
+
+      return;
+    }
+
+    setNewPasswordLoading(
+      true
+    );
+
+    const {
+      error,
+    } =
+      await supabase.auth.updateUser({
+        password:
+          newPassword,
+      });
+
+    if (error) {
+      setNewPasswordLoading(
+        false
+      );
+
+      setNewPasswordError(
+        error.message
+      );
+
+      return;
+    }
+
+    await supabase.auth.signOut();
+
+    setNewPasswordLoading(
+      false
+    );
+
+    setPasswordRecoveryMode(
+      false
+    );
+
+    setCurrentUser(null);
+    setAuthUser(null);
+
+    setNewPassword("");
+    setConfirmNewPassword("");
+
+    setAuthMode(
+      "login"
+    );
+
+    setAuthPassword("");
+
+    setAuthSuccess(
+      "Senha alterada com sucesso. Agora entre usando sua nova senha."
+    );
+
+    window.history.replaceState(
+      {},
+      document.title,
+      window.location.pathname
+    );
+  }
+
   async function logout() {
     await supabase.auth.signOut();
 
@@ -898,12 +1169,6 @@ function App() {
 
     const list =
       (data || []) as Server[];
-
-    /*
-      PRIMEIRO LOGIN:
-      se o usuário ainda não tiver
-      servidor, cria CONEXÃO automaticamente.
-    */
 
     if (
       list.length === 0
@@ -2193,11 +2458,6 @@ function App() {
       ""
     );
 
-    /*
-      O realtime normalmente atualiza,
-      mas também fazemos refresh imediato.
-    */
-
     await fetchMessages(
       currentChannelId
     );
@@ -2216,7 +2476,7 @@ function App() {
   }
 
   /* =======================================================
-     PERFIL REAL
+     PERFIL
   ======================================================= */
 
   function openProfile() {
@@ -2467,7 +2727,7 @@ function App() {
   }
 
   /* =======================================================
-     TELA CARREGANDO AUTH
+     CARREGANDO
   ======================================================= */
 
   if (authChecking) {
@@ -2489,7 +2749,257 @@ function App() {
   }
 
   /* =======================================================
-     LOGIN
+     NOVA SENHA
+  ======================================================= */
+
+  if (passwordRecoveryMode) {
+    return (
+      <div className="auth-page">
+        <div className="auth-glow auth-glow-one" />
+        <div className="auth-glow auth-glow-two" />
+
+        <div className="auth-brand">
+          <div className="auth-logo">
+            C
+          </div>
+
+          <div>
+            <h1>
+              CONEXÃO
+            </h1>
+
+            <p>
+              Proteja sua conta.
+            </p>
+          </div>
+        </div>
+
+        <div className="auth-card">
+          <div className="auth-card-header">
+            <h2>
+              Criar nova senha
+            </h2>
+
+            <p>
+              Digite sua nova senha para continuar.
+            </p>
+          </div>
+
+          <form
+            onSubmit={
+              handleNewPassword
+            }
+          >
+            <div className="auth-field">
+              <label>
+                NOVA SENHA
+              </label>
+
+              <input
+                type="password"
+                placeholder="Mínimo 6 caracteres"
+                value={
+                  newPassword
+                }
+                onChange={(
+                  event
+                ) => {
+                  setNewPassword(
+                    event.target.value
+                  );
+
+                  setNewPasswordError(
+                    ""
+                  );
+                }}
+              />
+            </div>
+
+            <div className="auth-field">
+              <label>
+                CONFIRMAR NOVA SENHA
+              </label>
+
+              <input
+                type="password"
+                placeholder="Repita sua nova senha"
+                value={
+                  confirmNewPassword
+                }
+                onChange={(
+                  event
+                ) => {
+                  setConfirmNewPassword(
+                    event.target.value
+                  );
+
+                  setNewPasswordError(
+                    ""
+                  );
+                }}
+              />
+            </div>
+
+            {newPasswordError && (
+              <div className="auth-error">
+                {
+                  newPasswordError
+                }
+              </div>
+            )}
+
+            <button
+              className="auth-submit"
+              type="submit"
+              disabled={
+                newPasswordLoading
+              }
+            >
+              {newPasswordLoading
+                ? "Alterando..."
+                : "Alterar senha"}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  /* =======================================================
+     ESQUECI MINHA SENHA
+  ======================================================= */
+
+  if (
+    !currentUser &&
+    showForgotPassword
+  ) {
+    return (
+      <div className="auth-page">
+        <div className="auth-glow auth-glow-one" />
+        <div className="auth-glow auth-glow-two" />
+
+        <div className="auth-brand">
+          <div className="auth-logo">
+            C
+          </div>
+
+          <div>
+            <h1>
+              CONEXÃO
+            </h1>
+
+            <p>
+              Recupere sua conta.
+            </p>
+          </div>
+        </div>
+
+        <div className="auth-card">
+          <div className="auth-card-header">
+            <h2>
+              Redefinir senha
+            </h2>
+
+            <p>
+              Enviaremos um link de recuperação para seu e-mail.
+            </p>
+          </div>
+
+          <form
+            onSubmit={
+              handleForgotPassword
+            }
+          >
+            <div className="auth-field">
+              <label>
+                E-MAIL
+              </label>
+
+              <input
+                type="email"
+                autoFocus
+                placeholder="voce@email.com"
+                value={
+                  recoveryEmail
+                }
+                onChange={(
+                  event
+                ) => {
+                  setRecoveryEmail(
+                    event.target.value
+                  );
+
+                  setRecoveryError(
+                    ""
+                  );
+
+                  setRecoverySuccess(
+                    ""
+                  );
+                }}
+              />
+            </div>
+
+            {recoveryError && (
+              <div className="auth-error">
+                {
+                  recoveryError
+                }
+              </div>
+            )}
+
+            {recoverySuccess && (
+              <div
+                className="auth-error"
+                style={{
+                  color:
+                    "#72e6a0",
+
+                  borderColor:
+                    "rgba(70,220,130,.25)",
+
+                  background:
+                    "rgba(70,220,130,.06)",
+                }}
+              >
+                {
+                  recoverySuccess
+                }
+              </div>
+            )}
+
+            <button
+              className="auth-submit"
+              type="submit"
+              disabled={
+                recoveryLoading
+              }
+            >
+              {recoveryLoading
+                ? "Enviando..."
+                : "Enviar link de recuperação"}
+            </button>
+          </form>
+
+          <div className="auth-switch">
+            Lembrou sua senha?
+
+            <button
+              type="button"
+              onClick={
+                closeForgotPassword
+              }
+            >
+              Voltar para entrar
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* =======================================================
+     LOGIN / CADASTRO
   ======================================================= */
 
   if (!currentUser) {
@@ -2549,19 +3059,15 @@ function App() {
 
                 <input
                   type="text"
-
                   placeholder="Seu nome"
-
                   value={
                     authName
                   }
-
                   onChange={(
                     event
                   ) =>
                     setAuthName(
-                      event.target
-                        .value
+                      event.target.value
                     )
                   }
                 />
@@ -2575,19 +3081,15 @@ function App() {
 
               <input
                 type="email"
-
                 placeholder="voce@email.com"
-
                 value={
                   authEmail
                 }
-
                 onChange={(
                   event
                 ) =>
                   setAuthEmail(
-                    event.target
-                      .value
+                    event.target.value
                   )
                 }
               />
@@ -2600,23 +3102,50 @@ function App() {
 
               <input
                 type="password"
-
                 placeholder="Mínimo 6 caracteres"
-
                 value={
                   authPassword
                 }
-
                 onChange={(
                   event
                 ) =>
                   setAuthPassword(
-                    event.target
-                      .value
+                    event.target.value
                   )
                 }
               />
             </div>
+
+            {authMode ===
+              "login" && (
+              <button
+                type="button"
+                onClick={
+                  openForgotPassword
+                }
+                style={{
+                  width: "100%",
+                  border: "none",
+                  background:
+                    "transparent",
+                  color:
+                    "#8295ff",
+                  textAlign:
+                    "right",
+                  cursor:
+                    "pointer",
+                  fontSize:
+                    "12px",
+                  marginTop:
+                    "-2px",
+                  marginBottom:
+                    "14px",
+                  padding: 0,
+                }}
+              >
+                Esqueceu sua senha?
+              </button>
+            )}
 
             {authMode ===
               "register" && (
@@ -2627,19 +3156,15 @@ function App() {
 
                 <input
                   type="password"
-
                   placeholder="Repita sua senha"
-
                   value={
                     authConfirmPassword
                   }
-
                   onChange={(
                     event
                   ) =>
                     setAuthConfirmPassword(
-                      event.target
-                        .value
+                      event.target.value
                     )
                   }
                 />
@@ -2657,7 +3182,6 @@ function App() {
             {authSuccess && (
               <div
                 className="auth-error"
-
                 style={{
                   color:
                     "#72e6a0",
@@ -2677,9 +3201,7 @@ function App() {
 
             <button
               className="auth-submit"
-
               type="submit"
-
               disabled={
                 authLoading
               }
@@ -2696,15 +3218,12 @@ function App() {
           {lastSignupEmail && (
             <button
               type="button"
-
               onClick={
                 resendConfirmation
               }
-
               disabled={
                 resendLoading
               }
-
               style={{
                 width: "100%",
                 marginTop:
@@ -2733,7 +3252,6 @@ function App() {
 
                 <button
                   type="button"
-
                   onClick={() =>
                     changeAuthMode(
                       "register"
@@ -2750,7 +3268,6 @@ function App() {
 
                 <button
                   type="button"
-
                   onClick={() =>
                     changeAuthMode(
                       "login"
@@ -2793,7 +3310,7 @@ function App() {
   }
 
   /* =======================================================
-     APP
+     APP PRINCIPAL
   ======================================================= */
 
   return (
@@ -2802,13 +3319,9 @@ function App() {
         ref={
           serverFileInputRef
         }
-
         className="server-file-input"
-
         type="file"
-
         accept="image/*"
-
         onChange={
           handleServerImage
         }
@@ -2818,19 +3331,13 @@ function App() {
         ref={
           profileFileInputRef
         }
-
         className="server-file-input"
-
         type="file"
-
         accept="image/*"
-
         onChange={
           handleProfileImage
         }
       />
-
-      {/* SERVIDORES */}
 
       <aside className="servers">
         <div className="logo">
@@ -2843,20 +3350,17 @@ function App() {
               key={
                 server.id
               }
-
               className={
                 server.id ===
                 currentServerId
                   ? "server active"
                   : "server"
               }
-
               onClick={() =>
                 changeServer(
                   server.id
                 )
               }
-
               title={
                 server.name
               }
@@ -2866,11 +3370,9 @@ function App() {
                   src={
                     server.icon_url
                   }
-
                   alt={
                     server.name
                   }
-
                   className="server-image"
                 />
               ) : (
@@ -2884,18 +3386,14 @@ function App() {
 
         <button
           className="server add"
-
           onClick={
             openCreateServer
           }
-
           title="Criar servidor"
         >
           +
         </button>
       </aside>
-
-      {/* CANAIS */}
 
       <aside className="channels">
         {currentServer && (
@@ -2918,11 +3416,9 @@ function App() {
               {isServerOwner && (
                 <button
                   className="workspace-settings"
-
                   onClick={
                     openEditServer
                   }
-
                   title="Configurações"
                 >
                   ⚙
@@ -2939,7 +3435,6 @@ function App() {
                 {isServerOwner && (
                   <button
                     className="add-channel"
-
                     onClick={
                       openCreateChannel
                     }
@@ -2953,7 +3448,6 @@ function App() {
                 (channel) => (
                   <div
                     className="channel-row"
-
                     key={
                       channel.id
                     }
@@ -2965,7 +3459,6 @@ function App() {
                           ? "channel active"
                           : "channel"
                       }
-
                       onClick={() =>
                         changeChannel(
                           channel.id
@@ -3022,11 +3515,8 @@ function App() {
           </>
         )}
 
-        {/* PERFIL */}
-
         <div
           className="profile profile-clickable"
-
           onClick={
             openProfile
           }
@@ -3037,9 +3527,7 @@ function App() {
                 src={
                   currentUser.avatar_url
                 }
-
                 alt=""
-
                 className="profile-avatar-image"
               />
             ) : (
@@ -3065,7 +3553,6 @@ function App() {
 
           <button
             className="settings-button"
-
             onClick={(
               event
             ) => {
@@ -3073,15 +3560,12 @@ function App() {
 
               void logout();
             }}
-
             title="Sair"
           >
             ↪
           </button>
         </div>
       </aside>
-
-      {/* CHAT */}
 
       <main className="chat">
         {currentChannel ? (
@@ -3137,7 +3621,6 @@ function App() {
                 (item) => (
                   <div
                     className="message"
-
                     key={
                       item.id
                     }
@@ -3148,9 +3631,7 @@ function App() {
                           src={
                             item.avatar_url
                           }
-
                           alt=""
-
                           className="member-profile-image"
                         />
                       ) : (
@@ -3202,22 +3683,17 @@ function App() {
 
               <input
                 type="text"
-
                 placeholder={`Mensagem em #${currentChannel.name}`}
-
                 value={
                   message
                 }
-
                 onChange={(
                   event
                 ) =>
                   setMessage(
-                    event.target
-                      .value
+                    event.target.value
                   )
                 }
-
                 onKeyDown={
                   handleMessageKeyDown
                 }
@@ -3249,8 +3725,6 @@ function App() {
         )}
       </main>
 
-      {/* MEMBROS */}
-
       <aside className="members">
         <h3>
           MEMBROS —{" "}
@@ -3263,7 +3737,6 @@ function App() {
           (member) => (
             <div
               className="member"
-
               key={
                 member.id
               }
@@ -3274,9 +3747,7 @@ function App() {
                     src={
                       member.avatar_url
                     }
-
                     alt=""
-
                     className="member-profile-image"
                   />
                 ) : (
@@ -3305,14 +3776,12 @@ function App() {
       {showCreateServer && (
         <div
           className="modal-overlay"
-
           onMouseDown={
             closeCreateServer
           }
         >
           <div
             className="modal-card"
-
             onMouseDown={(
               event
             ) =>
@@ -3332,7 +3801,6 @@ function App() {
 
               <button
                 className="modal-close"
-
                 onClick={
                   closeCreateServer
                 }
@@ -3351,13 +3819,11 @@ function App() {
                   value={
                     newServerName
                   }
-
                   onChange={(
                     event
                   ) => {
                     setNewServerName(
-                      event.target
-                        .value
+                      event.target.value
                     );
 
                     setServerError(
@@ -3379,7 +3845,6 @@ function App() {
             <div className="modal-footer">
               <button
                 className="modal-cancel"
-
                 onClick={
                   closeCreateServer
                 }
@@ -3389,7 +3854,6 @@ function App() {
 
               <button
                 className="modal-create"
-
                 onClick={() =>
                   void createServer()
                 }
@@ -3401,20 +3865,18 @@ function App() {
         </div>
       )}
 
-      {/* CONFIGURAÇÕES SERVIDOR */}
+      {/* CONFIGURAÇÕES DO SERVIDOR */}
 
       {showEditServer &&
         currentServer && (
         <div
           className="modal-overlay"
-
           onMouseDown={
             closeEditServer
           }
         >
           <div
             className="modal-card"
-
             onMouseDown={(
               event
             ) =>
@@ -3434,7 +3896,6 @@ function App() {
 
               <button
                 className="modal-close"
-
                 onClick={
                   closeEditServer
                 }
@@ -3451,7 +3912,6 @@ function App() {
                       src={
                         currentServer.icon_url
                       }
-
                       alt=""
                     />
                   ) : (
@@ -3469,7 +3929,6 @@ function App() {
                   <div className="server-image-buttons">
                     <button
                       className="server-upload-button"
-
                       onClick={
                         selectServerImage
                       }
@@ -3480,7 +3939,6 @@ function App() {
                     {currentServer.icon_url && (
                       <button
                         className="server-remove-image"
-
                         onClick={() =>
                           void removeServerImage()
                         }
@@ -3501,13 +3959,11 @@ function App() {
                   value={
                     editingServerName
                   }
-
                   onChange={(
                     event
                   ) =>
                     setEditingServerName(
-                      event.target
-                        .value
+                      event.target.value
                     )
                   }
                 />
@@ -3534,19 +3990,15 @@ function App() {
                 <div className="friend-add-row">
                   <input
                     type="email"
-
                     placeholder="email@exemplo.com"
-
                     value={
                       inviteEmail
                     }
-
                     onChange={(
                       event
                     ) => {
                       setInviteEmail(
-                        event.target
-                          .value
+                        event.target.value
                       );
 
                       setInviteError(
@@ -3620,7 +4072,6 @@ function App() {
             <div className="modal-footer">
               <button
                 className="modal-cancel"
-
                 onClick={
                   closeEditServer
                 }
@@ -3630,7 +4081,6 @@ function App() {
 
               <button
                 className="modal-create"
-
                 onClick={() =>
                   void saveEditedServer()
                 }
@@ -3647,14 +4097,12 @@ function App() {
       {showCreateChannel && (
         <div
           className="modal-overlay"
-
           onMouseDown={
             closeCreateChannel
           }
         >
           <div
             className="modal-card"
-
             onMouseDown={(
               event
             ) =>
@@ -3674,7 +4122,6 @@ function App() {
 
               <button
                 className="modal-close"
-
                 onClick={
                   closeCreateChannel
                 }
@@ -3697,13 +4144,11 @@ function App() {
                   value={
                     newChannelName
                   }
-
                   onChange={(
                     event
                   ) => {
                     setNewChannelName(
-                      event.target
-                        .value
+                      event.target.value
                     );
 
                     setChannelError(
@@ -3725,7 +4170,6 @@ function App() {
             <div className="modal-footer">
               <button
                 className="modal-cancel"
-
                 onClick={
                   closeCreateChannel
                 }
@@ -3735,7 +4179,6 @@ function App() {
 
               <button
                 className="modal-create"
-
                 onClick={() =>
                   void createChannel()
                 }
@@ -3752,14 +4195,12 @@ function App() {
       {showEditChannel && (
         <div
           className="modal-overlay"
-
           onMouseDown={
             closeEditChannel
           }
         >
           <div
             className="modal-card"
-
             onMouseDown={(
               event
             ) =>
@@ -3779,7 +4220,6 @@ function App() {
 
               <button
                 className="modal-close"
-
                 onClick={
                   closeEditChannel
                 }
@@ -3802,13 +4242,11 @@ function App() {
                   value={
                     editingChannelName
                   }
-
                   onChange={(
                     event
                   ) => {
                     setEditingChannelName(
-                      event.target
-                        .value
+                      event.target.value
                     );
 
                     setEditChannelError(
@@ -3830,7 +4268,6 @@ function App() {
             <div className="modal-footer">
               <button
                 className="modal-cancel"
-
                 onClick={
                   closeEditChannel
                 }
@@ -3840,7 +4277,6 @@ function App() {
 
               <button
                 className="modal-create"
-
                 onClick={() =>
                   void saveEditedChannel()
                 }
@@ -3857,14 +4293,12 @@ function App() {
       {showProfile && (
         <div
           className="modal-overlay"
-
           onMouseDown={
             closeProfile
           }
         >
           <div
             className="modal-card profile-modal"
-
             onMouseDown={(
               event
             ) =>
@@ -3884,7 +4318,6 @@ function App() {
 
               <button
                 className="modal-close"
-
                 onClick={
                   closeProfile
                 }
@@ -3901,7 +4334,6 @@ function App() {
                       src={
                         currentUser.avatar_url
                       }
-
                       alt=""
                     />
                   ) : (
@@ -3919,11 +4351,9 @@ function App() {
                   <div className="profile-photo-buttons">
                     <button
                       className="server-upload-button"
-
                       onClick={
                         selectProfileImage
                       }
-
                       disabled={
                         profileImageLoading
                       }
@@ -3936,7 +4366,6 @@ function App() {
                     {currentUser.avatar_url && (
                       <button
                         className="server-remove-image"
-
                         onClick={() =>
                           void removeProfileImage()
                         }
@@ -3957,13 +4386,11 @@ function App() {
                   value={
                     profileName
                   }
-
                   onChange={(
                     event
                   ) =>
                     setProfileName(
-                      event.target
-                        .value
+                      event.target.value
                     )
                   }
                 />
@@ -3978,15 +4405,12 @@ function App() {
                   value={
                     profileStatus
                   }
-
                   maxLength={40}
-
                   onChange={(
                     event
                   ) =>
                     setProfileStatus(
-                      event.target
-                        .value
+                      event.target.value
                     )
                   }
                 />
@@ -4016,7 +4440,6 @@ function App() {
             <div className="modal-footer">
               <button
                 className="modal-cancel"
-
                 onClick={
                   closeProfile
                 }
@@ -4026,11 +4449,9 @@ function App() {
 
               <button
                 className="modal-create"
-
                 disabled={
                   profileSaving
                 }
-
                 onClick={() =>
                   void saveProfile()
                 }
