@@ -1,1845 +1,1535 @@
-/* =========================================
-   CONEXÃO
-   ESTILO PRINCIPAL
-========================================= */
-
-* {
-  box-sizing: border-box;
+:root {
+  --bg-main: #030303;
+  --bg-secondary: rgba(12, 12, 18, 0.88);
+  --bg-card: rgba(18, 18, 28, 0.88);
+  --bg-hover: rgba(88, 101, 242, 0.16);
+  --border: rgba(255, 255, 255, 0.08);
+  --text-main: #ffffff;
+  --text-soft: #a5adc8;
+  --text-muted: #7b829d;
+  --blue-1: #3b82f6;
+  --blue-2: #2563eb;
+  --blue-3: #60a5fa;
+  --danger: #ff5f73;
+  --success: #4ade80;
+  --shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
 }
 
+body {
+  background:
+    radial-gradient(circle at top left, rgba(37, 99, 235, 0.35), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(59, 130, 246, 0.22), transparent 25%),
+    linear-gradient(135deg, #000000 0%, #020617 45%, #07122b 100%);
+  color: var(--text-main);
+}
+
+/* ESTRUTURA GERAL */
 .app {
-  width: 100vw;
+  display: flex;
+  width: 100%;
   height: 100vh;
-
-  display: grid;
-
-  grid-template-columns:
-    82px
-    260px
-    minmax(0, 1fr)
-    230px;
-
-  background: #090b10;
-  color: #ffffff;
-
   overflow: hidden;
 }
 
-
-/* =========================================
-   BARRA DE SERVIDORES
-========================================= */
-
-.servers {
-  height: 100vh;
-
-  background: #080a0f;
-
+/* BARRA DE SERVERS / ÍCONES */
+.servers-sidebar {
+  width: 88px;
+  min-width: 88px;
+  background: rgba(0, 0, 0, 0.55);
+  border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   align-items: center;
-
-  gap: 12px;
-
-  padding: 14px 0;
-
-  border-right: 1px solid #1a1d26;
+  gap: 14px;
+  padding: 20px 12px;
+  backdrop-filter: blur(12px);
 }
 
-
-/* LOGO */
-
-.logo {
-  width: 52px;
-  height: 52px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  border-radius: 16px;
-
-  background: linear-gradient(
-    135deg,
-    #6d5dfc,
-    #3c8cff
-  );
-
-  color: white;
-
-  font-size: 24px;
-  font-weight: 800;
-
-  margin-bottom: 8px;
-
-  box-shadow:
-    0 8px 25px
-    rgba(109, 93, 252, 0.25);
-}
-
-
-/* BOTÕES DOS SERVIDORES */
-
-.server {
+.server-icon,
+.server-add {
   width: 48px;
   height: 48px;
-
-  border: none;
-
   border-radius: 16px;
-
-  background: #171a22;
-
-  color: #a9afbf;
-
-  font-size: 12px;
+  border: 1px solid rgba(96, 165, 250, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(17, 24, 39, 0.95), rgba(30, 41, 59, 0.95));
+  color: #fff;
   font-weight: 700;
-
   cursor: pointer;
-
-  transition: 0.2s;
+  transition: 0.2s ease;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.28);
 }
 
-
-.server:hover {
-  background: #222633;
-
-  color: #ffffff;
-
+.server-icon:hover,
+.server-add:hover {
   transform: translateY(-2px);
+  background: linear-gradient(135deg, var(--blue-1), var(--blue-2));
+  box-shadow: 0 10px 30px rgba(37, 99, 235, 0.35);
 }
 
-
-.server.active {
-  background: linear-gradient(
-    135deg,
-    #6d5dfc,
-    #4c7dff
-  );
-
-  color: #ffffff;
-
-  box-shadow:
-    0 5px 20px
-    rgba(109, 93, 252, 0.25);
-}
-
-
-.server.add {
-  color: #57e389;
-
-  font-size: 22px;
-}
-
-
-.server.add:hover {
-  background: #183226;
-
-  color: #65f39a;
-}
-
-
-/* =========================================
-   BARRA DE CANAIS
-========================================= */
-
-.channels {
-  height: 100vh;
-
-  min-width: 0;
-
+/* SIDEBAR ESQUERDA */
+.sidebar {
+  width: 300px;
+  min-width: 300px;
+  background: rgba(7, 7, 10, 0.82);
+  border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-
-  background: #101219;
-
-  border-right: 1px solid #1b1e27;
+  backdrop-filter: blur(18px);
 }
 
-
-/* CABEÇALHO DA COMUNIDADE */
-
-.workspace {
-  padding: 20px;
-
-  border-bottom: 1px solid #1d2029;
+.sidebar-header {
+  padding: 22px 20px 16px;
+  border-bottom: 1px solid var(--border);
 }
 
-
-.workspace h2 {
-  margin: 0;
-
-  color: #ffffff;
-
-  font-size: 18px;
+.sidebar-header h1 {
+  font-size: 28px;
   font-weight: 800;
-
-  letter-spacing: 1px;
+  letter-spacing: 0.4px;
 }
 
+.sidebar-header p {
+  margin-top: 4px;
+  font-size: 14px;
+  color: var(--text-soft);
+}
 
-.workspace span {
-  display: block;
+.sidebar-section {
+  padding: 18px 14px 8px;
+}
 
-  margin-top: 5px;
-
-  color: #6f7585;
-
+.sidebar-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding: 0 8px;
+  color: var(--text-muted);
   font-size: 12px;
-}
-
-
-/* =========================================
-   GRUPOS DE CANAIS
-========================================= */
-
-.channel-group {
-  padding: 20px 12px 0;
-}
-
-
-.channel-group > p {
-  margin: 0 8px 8px;
-
-  color: #626979;
-
-  font-size: 11px;
   font-weight: 800;
-
-  letter-spacing: 0.5px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
 }
 
-
-/* TÍTULO + BOTÃO DE ADICIONAR */
-
-.channel-group-title {
-  display: flex;
-
-  align-items: center;
-
-  justify-content: space-between;
-
-  padding: 0 6px 0 8px;
-
-  margin-bottom: 6px;
-}
-
-
-.channel-group-title p {
-  margin: 0;
-
-  color: #626979;
-
-  font-size: 11px;
-  font-weight: 800;
-
-  letter-spacing: 0.5px;
-}
-
-
-/* BOTÃO + PARA CRIAR CANAL */
-
-.add-channel {
-  width: 26px;
-  height: 26px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  border: none;
-
-  border-radius: 8px;
-
-  background: transparent;
-
-  color: #7e8594;
-
-  font-size: 20px;
-
-  cursor: pointer;
-
-  transition: 0.2s;
-}
-
-
-.add-channel:hover {
-  background: #1d2130;
-
-  color: #ffffff;
-}
-
-
-/* =========================================
-   CANAIS
-========================================= */
-
-.channel {
-  width: 100%;
-
-  display: block;
-
-  border: none;
-
-  background: transparent;
-
-  color: #8f96a7;
-
-  text-align: left;
-
-  padding: 10px 12px;
-
-  border-radius: 9px;
-
-  cursor: pointer;
-
-  margin-bottom: 3px;
-
-  transition: 0.2s;
-}
-
-
-.channel:hover {
-  background: #191c25;
-
-  color: #ffffff;
-}
-
-
-.channel.active {
-  background: #1d2130;
-
-  color: #ffffff;
-}
-
-
-/* =========================================
-   PERFIL DO USUÁRIO
-========================================= */
-
-.profile {
-  margin-top: auto;
-
-  display: flex;
-  align-items: center;
-
-  padding: 12px;
-
-  background: #0b0d13;
-
-  border-top: 1px solid #1d2029;
-}
-
-
-.avatar {
-  width: 38px;
-  height: 38px;
-
-  flex-shrink: 0;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  border-radius: 12px;
-
-  background: linear-gradient(
-    135deg,
-    #6d5dfc,
-    #38bdf8
-  );
-
-  color: #ffffff;
-
-  font-weight: 800;
-}
-
-
-.profile-info {
-  flex: 1;
-
-  min-width: 0;
-
+.channel-list,
+.friend-list,
+.dm-list {
   display: flex;
   flex-direction: column;
-
-  margin-left: 10px;
+  gap: 6px;
 }
 
-
-.profile-info strong {
-  color: #ffffff;
-
-  font-size: 13px;
-}
-
-
-.profile-info span {
-  margin-top: 2px;
-
-  color: #57e389;
-
-  font-size: 11px;
-}
-
-
-.settings-button {
-  width: 34px;
-  height: 34px;
-
-  border: none;
-
-  border-radius: 9px;
-
-  background: transparent;
-
-  color: #8d94a6;
-
+.channel-item,
+.friend-item,
+.dm-item {
+  padding: 12px 14px;
+  border-radius: 14px;
+  color: var(--text-soft);
+  font-size: 15px;
+  font-weight: 600;
   cursor: pointer;
-
-  transition: 0.2s;
+  transition: 0.2s ease;
+  border: 1px solid transparent;
 }
 
-
-.settings-button:hover {
-  background: #1b1e27;
-
-  color: #ffffff;
+.channel-item:hover,
+.friend-item:hover,
+.dm-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-main);
+  border-color: rgba(59, 130, 246, 0.15);
 }
 
+.channel-item.active,
+.friend-item.active,
+.dm-item.active {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.22), rgba(37, 99, 235, 0.12));
+  color: #fff;
+  border: 1px solid rgba(96, 165, 250, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.05);
+}
 
-/* =========================================
-   ÁREA DO CHAT
-========================================= */
-
-.chat {
-  height: 100vh;
-
-  min-width: 0;
-
+/* CONTEÚDO PRINCIPAL */
+.main {
+  flex: 1;
   display: flex;
   flex-direction: column;
-
-  background: #12151d;
-}
-
-
-/* =========================================
-   CABEÇALHO DO CHAT
-========================================= */
-
-.chat-header {
-  min-height: 70px;
-
-  flex-shrink: 0;
-
-  display: flex;
-
-  align-items: center;
-
-  justify-content: space-between;
-
-  padding: 0 24px;
-
-  border-bottom: 1px solid #1d202a;
-
-  background:
-    rgba(18, 21, 29, 0.96);
-
-  backdrop-filter: blur(15px);
-}
-
-
-.chat-title {
-  min-width: 0;
-
-  display: flex;
-
-  align-items: center;
-
-  gap: 12px;
-}
-
-
-.chat-title strong {
-  color: #ffffff;
-
-  font-size: 17px;
-
-  white-space: nowrap;
-}
-
-
-.chat-title span {
-  color: #777e8d;
-
-  font-size: 13px;
-
-  overflow: hidden;
-
-  text-overflow: ellipsis;
-
-  white-space: nowrap;
-}
-
-
-/* BOTÕES DO CABEÇALHO */
-
-.header-actions {
-  display: flex;
-
-  gap: 8px;
-}
-
-
-.header-actions button {
-  width: 38px;
-  height: 38px;
-
-  border: none;
-
-  border-radius: 10px;
-
-  background: #191c25;
-
-  color: #aeb4c0;
-
-  cursor: pointer;
-
-  transition: 0.2s;
-}
-
-
-.header-actions button:hover {
-  background: #242834;
-
-  color: #ffffff;
-}
-
-
-/* =========================================
-   ÁREA DE MENSAGENS
-========================================= */
-
-.messages {
-  flex: 1;
-
-  min-height: 0;
-
-  overflow-y: auto;
-
-  padding: 30px;
-}
-
-
-/* BARRA DE ROLAGEM */
-
-.messages::-webkit-scrollbar {
-  width: 8px;
-}
-
-
-.messages::-webkit-scrollbar-track {
   background: transparent;
 }
 
-
-.messages::-webkit-scrollbar-thumb {
-  background: #292e3b;
-
-  border-radius: 20px;
-}
-
-
-/* =========================================
-   BOAS-VINDAS DO CANAL
-========================================= */
-
-.welcome {
-  margin-top: 40px;
-
-  margin-bottom: 35px;
-}
-
-
-.welcome-icon {
-  width: 58px;
-  height: 58px;
-
+/* TOPO */
+.topbar {
+  height: 78px;
+  min-height: 78px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(4, 4, 8, 0.55);
+  backdrop-filter: blur(14px);
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
+  padding: 0 28px;
+}
 
-  margin-bottom: 14px;
-
-  border-radius: 18px;
-
-  background: #202432;
-
-  color: #ffffff;
-
-  font-size: 26px;
+.topbar-left h2 {
+  font-size: 24px;
   font-weight: 800;
 }
 
-
-.welcome h1 {
-  margin: 0 0 8px;
-
-  color: #ffffff;
-
-  font-size: 26px;
-}
-
-
-.welcome p {
-  margin: 0;
-
-  color: #7e8594;
-
+.topbar-left p {
+  margin-top: 3px;
+  color: var(--text-soft);
   font-size: 14px;
 }
 
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
 
-/* =========================================
-   MENSAGENS
-========================================= */
+/* BOTÕES */
+.btn,
+.button,
+button {
+  border: none;
+  border-radius: 14px;
+  padding: 12px 18px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.btn-primary,
+.button-primary {
+  background: linear-gradient(135deg, var(--blue-1), var(--blue-2));
+  color: white;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.28);
+}
+
+.btn-primary:hover,
+.button-primary:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+}
+
+.btn-secondary,
+.button-secondary {
+  background: rgba(255, 255, 255, 0.04);
+  color: white;
+  border: 1px solid var(--border);
+}
+
+.btn-secondary:hover,
+.button-secondary:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.btn-danger,
+.button-danger {
+  background: rgba(255, 95, 115, 0.16);
+  color: #ffb4bf;
+  border: 1px solid rgba(255, 95, 115, 0.22);
+}
+
+/* ÁREA CENTRAL */
+.content {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.chat-area,
+.page-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 26px;
+  gap: 18px;
+  overflow: hidden;
+}
+
+/* CARD DE BOAS-VINDAS / BLOCOS */
+.card,
+.panel,
+.welcome-box,
+.content-box {
+  background: linear-gradient(180deg, rgba(12, 14, 24, 0.88), rgba(7, 9, 18, 0.9));
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  box-shadow: var(--shadow);
+}
+
+.welcome-box,
+.content-box {
+  padding: 28px;
+}
+
+.welcome-box h2,
+.content-box h2 {
+  font-size: 34px;
+  margin-bottom: 10px;
+  font-weight: 800;
+}
+
+.welcome-box p,
+.content-box p {
+  color: var(--text-soft);
+  font-size: 16px;
+}
+
+/* MENSAGENS */
+.messages {
+  flex: 1;
+  background: rgba(8, 9, 14, 0.58);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  padding: 22px;
+  overflow-y: auto;
+  box-shadow: var(--shadow);
+}
 
 .message {
   display: flex;
-
-  align-items: flex-start;
-
   gap: 12px;
-
-  padding: 12px 8px;
-
-  border-radius: 12px;
-
-  transition: 0.15s;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
 
-
-.message:hover {
-  background: #151923;
+.message:last-child {
+  border-bottom: none;
 }
-
-
-/* AVATAR DA MENSAGEM */
 
 .message-avatar {
   width: 42px;
   height: 42px;
-
-  flex-shrink: 0;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  border-radius: 14px;
-
-  background: #242938;
-
-  color: #ffffff;
-
-  font-weight: 800;
-}
-
-
-/* CONTEÚDO */
-
-.message-content {
-  min-width: 0;
-
-  flex: 1;
-}
-
-
-.message-info {
-  display: flex;
-
-  align-items: center;
-
-  gap: 8px;
-
-  margin-bottom: 5px;
-}
-
-
-.message-info strong {
-  color: #ffffff;
-
-  font-size: 14px;
-}
-
-
-.message-info span {
-  color: #646b79;
-
-  font-size: 11px;
-}
-
-
-.message p {
-  margin: 0;
-
-  color: #d8dbe2;
-
-  font-size: 14px;
-
-  line-height: 1.5;
-
-  word-break: break-word;
-}
-
-
-/* =========================================
-   CAIXA PARA ESCREVER MENSAGEM
-========================================= */
-
-.message-box {
-  height: 58px;
-
-  flex-shrink: 0;
-
-  display: flex;
-
-  align-items: center;
-
-  gap: 8px;
-
-  margin: 0 24px 24px;
-
-  padding: 0 12px;
-
-  border: 1px solid #252938;
-
-  border-radius: 17px;
-
-  background: #191c25;
-
-  transition: 0.2s;
-}
-
-
-.message-box:focus-within {
-  border-color: #4c55a8;
-
-  box-shadow:
-    0 0 0 3px
-    rgba(109, 93, 252, 0.08);
-}
-
-
-.message-box input {
-  flex: 1;
-
-  min-width: 0;
-
-  border: none;
-
-  outline: none;
-
-  background: transparent;
-
-  color: #ffffff;
-
-  font-size: 14px;
-}
-
-
-.message-box input::placeholder {
-  color: #606776;
-}
-
-
-.message-box button {
-  width: 34px;
-  height: 34px;
-
-  flex-shrink: 0;
-
-  display: flex;
-
-  align-items: center;
-  justify-content: center;
-
-  border: none;
-
-  border-radius: 9px;
-
-  background: transparent;
-
-  color: #939aaa;
-
-  cursor: pointer;
-
-  transition: 0.2s;
-}
-
-
-.message-box button:hover {
-  background: #242834;
-
-  color: #ffffff;
-}
-
-
-/* =========================================
-   LISTA DE MEMBROS
-========================================= */
-
-.members {
-  height: 100vh;
-
-  min-width: 0;
-
-  background: #0e1017;
-
-  border-left: 1px solid #1b1e27;
-
-  padding: 22px 14px;
-}
-
-
-.members h3 {
-  margin: 0 0 15px;
-
-  color: #676e7e;
-
-  font-size: 11px;
-
-  letter-spacing: 0.5px;
-}
-
-
-/* MEMBRO */
-
-.member {
-  display: flex;
-
-  align-items: center;
-
-  gap: 10px;
-
-  padding: 8px;
-
-  border-radius: 10px;
-
-  color: #aeb4c1;
-
-  cursor: pointer;
-
-  transition: 0.15s;
-}
-
-
-.member:hover {
-  background: #171a22;
-
-  color: #ffffff;
-}
-
-
-/* AVATAR DO MEMBRO */
-
-.member-avatar {
-  position: relative;
-
-  width: 34px;
-  height: 34px;
-
-  flex-shrink: 0;
-
-  display: flex;
-
-  align-items: center;
-
-  justify-content: center;
-
-  border-radius: 11px;
-
-  background: #242836;
-
-  color: #ffffff;
-
-  font-size: 12px;
-
-  font-weight: 800;
-}
-
-
-/* STATUS */
-
-.member-avatar::after {
-  content: "";
-
-  position: absolute;
-
-  right: -2px;
-
-  bottom: -2px;
-
-  width: 9px;
-
-  height: 9px;
-
-  border: 3px solid #0e1017;
-
   border-radius: 50%;
+  background: linear-gradient(135deg, var(--blue-1), var(--blue-3));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  color: white;
+  flex-shrink: 0;
 }
 
-
-.member-avatar.online::after {
-  background: #4ade80;
+.message-content strong {
+  display: block;
+  font-size: 15px;
+  margin-bottom: 4px;
 }
 
-
-.member-avatar.offline::after {
-  background: #575d6a;
+.message-content span {
+  color: var(--text-soft);
+  line-height: 1.5;
 }
 
-
-/* =========================================
-   RESPONSIVIDADE
-========================================= */
-
-@media (max-width: 1100px) {
-
-  .app {
-    grid-template-columns:
-      72px
-      230px
-      minmax(0, 1fr);
-  }
-
-  .members {
-    display: none;
-  }
-
+/* BARRA DE ENVIO */
+.message-input-area,
+.composer {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  background: rgba(8, 10, 18, 0.75);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 14px;
+  box-shadow: var(--shadow);
 }
 
-
-@media (max-width: 750px) {
-
-  .app {
-    grid-template-columns:
-      70px
-      minmax(0, 1fr);
-  }
-
-  .channels {
-    display: none;
-  }
-
+input,
+textarea,
+select {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  color: white;
+  padding: 14px 16px;
+  border-radius: 14px;
+  outline: none;
+  font-size: 14px;
+  transition: 0.2s ease;
 }
 
-
-@media (max-width: 500px) {
-
-  .servers {
-    display: none;
-  }
-
-  .app {
-    grid-template-columns: 1fr;
-  }
-
-  .messages {
-    padding: 20px;
-  }
-
-  .message-box {
-    margin:
-      0
-      14px
-      14px;
-  }
-
+input::placeholder,
+textarea::placeholder {
+  color: #7f88a6;
 }
-/* =========================================
-   MODAL - CRIAR CANAL
-========================================= */
 
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: rgba(59, 130, 246, 0.55);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+/* LISTAS DE AMIGOS / CONVITES */
+.friend-card,
+.invite-card,
+.user-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  background: rgba(10, 12, 22, 0.88);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+}
+
+.friend-info,
+.invite-info,
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.friend-avatar,
+.user-avatar,
+.invite-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--blue-1), var(--blue-3));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+}
+
+.status-online {
+  color: var(--success);
+  font-weight: 700;
+}
+
+.status-pending {
+  color: #facc15;
+  font-weight: 700;
+}
+
+/* MODAIS */
 .modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 9999;
-
+  background: rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
-
+  z-index: 999;
   padding: 20px;
-
-  background: rgba(3, 5, 10, 0.72);
-
-  backdrop-filter: blur(8px);
-
-  animation: modalFadeIn 0.18s ease;
 }
 
-.modal-card {
+.modal {
   width: 100%;
-  max-width: 460px;
+  max-width: 520px;
+  background: linear-gradient(180deg, rgba(10, 12, 22, 0.97), rgba(6, 8, 16, 0.97));
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  padding: 28px;
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5);
+}
 
+.modal h3 {
+  font-size: 28px;
+  margin-bottom: 8px;
+}
+
+.modal p {
+  color: var(--text-soft);
+  margin-bottom: 20px;
+}
+
+/* SCROLL */
+::-webkit-scrollbar {
+  width: 9px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(59, 130, 246, 0.28);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(59, 130, 246, 0.45);
+}
+
+/* RESPONSIVO */
+@media (max-width: 1100px) {
+  .sidebar {
+    width: 250px;
+    min-width: 250px;
+  }
+
+  .topbar {
+    padding: 0 18px;
+  }
+
+  .chat-area,
+  .page-content {
+    padding: 18px;
+  }
+}
+
+@media (max-width: 860px) {
+  .servers-sidebar {
+    display: none;
+  }
+
+  .sidebar {
+    width: 220px;
+    min-width: 220px;
+  }
+
+  .topbar-left h2 {
+    font-size: 20px;
+  }
+
+  .welcome-box h2,
+  .content-box h2 {
+    font-size: 26px;
+  }
+}
+
+@media (max-width: 680px) {
+  .app {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    display: none;
+  }
+
+  .topbar {
+    min-height: 70px;
+    height: 70px;
+  }
+
+  .chat-area,
+  .page-content {
+    padding: 14px;
+  }
+
+  .message-input-area,
+  .composer {
+    flex-direction: column;
+  }
+}
+/* =========================================================
+   LOGO OFICIAL CONEXÃO
+========================================================= */
+
+.main-logo-image,
+.auth-logo-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.main-logo-image {
+  border-radius: 16px;
+}
+
+.auth-logo-image {
+  border-radius: 14px;
+}
+
+.logo,
+.auth-logo {
   overflow: hidden;
+  padding: 0;
+  background: #000814;
+  border: 1px solid rgba(0, 153, 255, 0.5);
 
-  border: 1px solid #292e3c;
+  box-shadow:
+    0 0 10px rgba(0, 153, 255, 0.4),
+    0 0 25px rgba(0, 110, 255, 0.22);
+}
+/* =========================================================
+   FUNDO OFICIAL CONEXÃO
+========================================================= */
 
-  border-radius: 22px;
+.auth-page {
+  position: relative !important;
+
+  width: 100% !important;
+  min-height: 100vh !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  overflow: hidden !important;
+
+  padding: 32px !important;
 
   background:
     linear-gradient(
-      180deg,
-      #171a24,
-      #11141c
-    );
+      90deg,
+      rgba(0, 0, 0, 0.28),
+      rgba(0, 7, 24, 0.38)
+    ),
+    url("./assets/fundo-conexao.png") center center / cover no-repeat !important;
+
+  color: #ffffff !important;
+}
+
+
+/* ESCONDE OS GLOWS ANTIGOS */
+
+.auth-glow {
+  display: none !important;
+}
+
+
+/* =========================================================
+   MARCA NO CANTO SUPERIOR
+========================================================= */
+
+.auth-brand {
+  position: absolute !important;
+
+  top: 28px !important;
+  left: 32px !important;
+
+  display: flex !important;
+  align-items: center !important;
+
+  gap: 12px !important;
+
+  z-index: 10 !important;
+}
+
+.auth-brand h1 {
+  margin: 0 !important;
+
+  color: #ffffff !important;
+
+  font-size: 20px !important;
+  font-weight: 900 !important;
+
+  letter-spacing: 1.2px !important;
+
+  text-shadow:
+    0 0 10px rgba(0, 140, 255, 0.45) !important;
+}
+
+.auth-brand p {
+  margin: 3px 0 0 !important;
+
+  color: #91a5c3 !important;
+
+  font-size: 11px !important;
+}
+
+
+/* =========================================================
+   LOGO
+========================================================= */
+
+.auth-logo {
+  width: 54px !important;
+  height: 54px !important;
+
+  min-width: 54px !important;
+
+  padding: 0 !important;
+
+  overflow: hidden !important;
+
+  border-radius: 15px !important;
+
+  background: #020815 !important;
+
+  border: 1px solid rgba(0, 174, 255, 0.75) !important;
 
   box-shadow:
-    0 30px 80px
-    rgba(0, 0, 0, 0.55);
-
-  animation: modalScaleIn 0.2s ease;
+    0 0 8px rgba(0, 174, 255, 0.8),
+    0 0 25px rgba(0, 103, 255, 0.38) !important;
 }
 
-.modal-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+.auth-logo img {
+  width: 100% !important;
+  height: 100% !important;
 
-  gap: 20px;
+  display: block !important;
 
-  padding: 24px 24px 18px;
+  object-fit: cover !important;
+
+  border-radius: inherit !important;
 }
 
-.modal-header h2 {
-  margin: 0;
 
-  color: #ffffff;
+/* =========================================================
+   CARD DE LOGIN
+========================================================= */
 
-  font-size: 22px;
+.auth-card {
+  position: relative !important;
+
+  z-index: 5 !important;
+
+  width: 100% !important;
+  max-width: 430px !important;
+
+  padding: 34px !important;
+
+  border-radius: 22px !important;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(3, 10, 24, 0.93),
+      rgba(0, 4, 13, 0.92)
+    ) !important;
+
+  border: 1px solid rgba(0, 153, 255, 0.25) !important;
+
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.7),
+    0 0 35px rgba(0, 112, 255, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04) !important;
+
+  backdrop-filter: blur(18px) !important;
+  -webkit-backdrop-filter: blur(18px) !important;
 }
 
-.modal-header p {
-  margin: 7px 0 0;
 
-  color: #7f8797;
+/* =========================================================
+   CABEÇALHO
+========================================================= */
 
-  font-size: 13px;
+.auth-card-header {
+  text-align: center !important;
 
-  line-height: 1.5;
+  margin-bottom: 28px !important;
 }
 
-.modal-close {
-  width: 36px;
-  height: 36px;
+.auth-card-header h2 {
+  margin: 0 0 8px !important;
 
-  flex-shrink: 0;
+  color: #ffffff !important;
 
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  border: none;
-
-  border-radius: 11px;
-
-  background: transparent;
-
-  color: #7d8595;
-
-  font-size: 26px;
-
-  cursor: pointer;
-
-  transition: 0.2s;
+  font-size: 28px !important;
+  font-weight: 800 !important;
 }
 
-.modal-close:hover {
-  background: #222631;
+.auth-card-header p {
+  margin: 0 !important;
 
-  color: #ffffff;
+  color: #7e8da6 !important;
+
+  font-size: 13px !important;
 }
 
-.modal-body {
-  padding: 4px 24px 24px;
+
+/* =========================================================
+   CAMPOS
+========================================================= */
+
+.auth-field {
+  display: flex !important;
+  flex-direction: column !important;
+
+  gap: 8px !important;
+
+  margin-bottom: 18px !important;
 }
 
-.modal-body label {
-  display: block;
+.auth-field label {
+  color: #8293ad !important;
 
-  margin-bottom: 8px;
+  font-size: 11px !important;
+  font-weight: 800 !important;
 
-  color: #8d95a5;
-
-  font-size: 11px;
-  font-weight: 800;
-
-  letter-spacing: 0.6px;
+  letter-spacing: 0.8px !important;
 }
 
-.channel-name-input {
-  height: 52px;
+.auth-field input {
+  width: 100% !important;
+  height: 50px !important;
 
-  display: flex;
-  align-items: center;
+  padding: 0 15px !important;
 
-  padding: 0 15px;
+  outline: none !important;
 
-  border: 1px solid #2a2f3d;
+  border-radius: 12px !important;
 
-  border-radius: 14px;
+  border: 1px solid rgba(97, 129, 176, 0.25) !important;
 
-  background: #0d1017;
+  background: rgba(1, 7, 18, 0.88) !important;
 
-  transition: 0.2s;
+  color: #ffffff !important;
+
+  font-size: 14px !important;
+
+  transition: 0.2s !important;
 }
 
-.channel-name-input:focus-within {
-  border-color: #6d5dfc;
+.auth-field input::placeholder {
+  color: #46546a !important;
+}
+
+.auth-field input:focus {
+  border-color: #008cff !important;
+
+  box-shadow:
+    0 0 0 3px rgba(0, 140, 255, 0.12),
+    0 0 18px rgba(0, 140, 255, 0.16) !important;
+}
+
+
+/* =========================================================
+   BOTÃO PRINCIPAL
+========================================================= */
+
+.auth-submit {
+  width: 100% !important;
+
+  min-height: 52px !important;
+
+  margin-top: 4px !important;
+
+  border: none !important;
+
+  border-radius: 12px !important;
+
+  background:
+    linear-gradient(
+      90deg,
+      #006eff 0%,
+      #00b7ff 100%
+    ) !important;
+
+  color: #ffffff !important;
+
+  font-size: 14px !important;
+  font-weight: 800 !important;
+
+  cursor: pointer !important;
+
+  box-shadow:
+    0 8px 25px rgba(0, 117, 255, 0.28),
+    0 0 18px rgba(0, 183, 255, 0.18) !important;
+
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s !important;
+}
+
+.auth-submit:hover {
+  transform: translateY(-2px) !important;
+
+  box-shadow:
+    0 12px 32px rgba(0, 117, 255, 0.4),
+    0 0 24px rgba(0, 183, 255, 0.28) !important;
+}
+
+.auth-submit:disabled {
+  opacity: 0.6 !important;
+
+  cursor: not-allowed !important;
+}
+
+
+/* =========================================================
+   CRIAR CONTA
+========================================================= */
+
+.auth-switch {
+  margin-top: 22px !important;
+
+  text-align: center !important;
+
+  color: #6e7d94 !important;
+
+  font-size: 12px !important;
+}
+
+.auth-switch button {
+  padding: 0 !important;
+
+  border: none !important;
+
+  background: transparent !important;
+
+  color: #21a7ff !important;
+
+  font-size: 12px !important;
+  font-weight: 700 !important;
+
+  cursor: pointer !important;
+}
+
+.auth-switch button:hover {
+  color: #62c7ff !important;
+}
+
+
+/* =========================================================
+   ERROS
+========================================================= */
+
+.auth-error {
+  width: 100% !important;
+
+  margin: 10px 0 16px !important;
+
+  padding: 12px 14px !important;
+
+  border-radius: 10px !important;
+
+  border: 1px solid rgba(255, 83, 104, 0.32) !important;
+
+  background: rgba(255, 50, 76, 0.08) !important;
+
+  color: #ff7688 !important;
+
+  font-size: 12px !important;
+}
+
+
+/* =========================================================
+   RESPONSIVO
+========================================================= */
+
+@media (max-width: 700px) {
+  .auth-page {
+    padding: 20px !important;
+
+    background-position: center center !important;
+  }
+
+  .auth-brand {
+    top: 18px !important;
+    left: 20px !important;
+  }
+
+  .auth-brand p {
+    display: none !important;
+  }
+
+  .auth-card {
+    max-width: 390px !important;
+
+    padding: 28px 22px !important;
+  }
+}
+/* =========================================================
+   TMJ - NOVA IDENTIDADE
+   NOME CENTRALIZADO + MAIOR
+========================================================= */
+
+
+/* =========================================================
+   FUNDO LOGIN / CADASTRO / RECUPERAÇÃO
+========================================================= */
+
+.auth-page {
+  position: relative !important;
+
+  width: 100% !important;
+  min-width: 100% !important;
+
+  min-height: 100vh !important;
+  height: 100vh !important;
+
+  display: flex !important;
+
+  align-items: center !important;
+  justify-content: center !important;
+
+  overflow: hidden !important;
+
+  padding: 120px 30px 30px !important;
+
+  background:
+    linear-gradient(
+      90deg,
+      rgba(0, 3, 12, 0.12),
+      rgba(0, 8, 25, 0.10)
+    ),
+    url("./assets/fundo-conexao.png")
+      center center /
+      cover
+      no-repeat !important;
+
+  color: #ffffff !important;
+}
+
+
+/* remove os efeitos antigos */
+
+.auth-glow {
+  display: none !important;
+}
+
+
+/* =========================================================
+   MARCA TMJ CENTRALIZADA
+========================================================= */
+
+.auth-brand {
+  position: absolute !important;
+
+  top: 28px !important;
+
+  left: 50% !important;
+
+  transform: translateX(-50%) !important;
+
+  z-index: 20 !important;
+
+  width: max-content !important;
+
+  display: flex !important;
+
+  flex-direction: column !important;
+
+  align-items: center !important;
+  justify-content: center !important;
+
+  gap: 8px !important;
+
+  text-align: center !important;
+}
+
+
+/* =========================================================
+   LOGO TMJ
+========================================================= */
+
+.auth-logo {
+  width: 72px !important;
+  height: 72px !important;
+
+  min-width: 72px !important;
+  min-height: 72px !important;
+
+  padding: 0 !important;
+
+  display: flex !important;
+
+  align-items: center !important;
+  justify-content: center !important;
+
+  overflow: hidden !important;
+
+  border-radius: 20px !important;
+
+  background: #000611 !important;
+
+  border:
+    1px solid
+    rgba(0, 174, 255, 0.72) !important;
+
+  box-shadow:
+    0 0 8px rgba(0, 174, 255, 0.8),
+    0 0 20px rgba(0, 140, 255, 0.55),
+    0 0 45px rgba(0, 92, 255, 0.30) !important;
+}
+
+
+.auth-logo img {
+  width: 100% !important;
+  height: 100% !important;
+
+  max-width: 100% !important;
+  max-height: 100% !important;
+
+  display: block !important;
+
+  object-fit: cover !important;
+
+  border-radius: inherit !important;
+}
+
+
+/* =========================================================
+   NOME TMJ
+========================================================= */
+
+.auth-brand h1 {
+  margin: 0 !important;
+
+  padding: 0 !important;
+
+  color: #ffffff !important;
+
+  font-size: 42px !important;
+
+  line-height: 1 !important;
+
+  font-weight: 900 !important;
+
+  letter-spacing: 6px !important;
+
+  text-align: center !important;
+
+  text-transform: uppercase !important;
+
+  text-shadow:
+    0 0 5px rgba(255, 255, 255, 0.35),
+    0 0 12px rgba(0, 183, 255, 0.80),
+    0 0 30px rgba(0, 102, 255, 0.55) !important;
+}
+
+
+.auth-brand p {
+  margin: 2px 0 0 !important;
+
+  padding: 0 !important;
+
+  color: #a8cce8 !important;
+
+  font-size: 12px !important;
+
+  font-weight: 500 !important;
+
+  letter-spacing: 2px !important;
+
+  text-align: center !important;
+
+  text-shadow:
+    0 0 10px
+    rgba(0, 153, 255, 0.35) !important;
+}
+
+
+/* =========================================================
+   CARD DO LOGIN
+========================================================= */
+
+.auth-card {
+  position: relative !important;
+
+  z-index: 10 !important;
+
+  width: 100% !important;
+
+  max-width: 430px !important;
+
+  padding: 34px !important;
+
+  border-radius: 22px !important;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(2, 8, 21, 0.96),
+      rgba(0, 4, 13, 0.95)
+    ) !important;
+
+  border:
+    1px solid
+    rgba(0, 153, 255, 0.35) !important;
+
+  box-shadow:
+    0 30px 90px rgba(0, 0, 0, 0.75),
+    0 0 35px rgba(0, 119, 255, 0.22),
+    inset 0 1px 0
+      rgba(255, 255, 255, 0.05) !important;
+
+  backdrop-filter: blur(18px) !important;
+
+  -webkit-backdrop-filter:
+    blur(18px) !important;
+}
+
+
+/* =========================================================
+   TÍTULO DO CARD
+========================================================= */
+
+.auth-card-header {
+  width: 100% !important;
+
+  margin-bottom: 28px !important;
+
+  text-align: center !important;
+}
+
+
+.auth-card-header h2 {
+  margin: 0 0 8px !important;
+
+  color: #ffffff !important;
+
+  font-size: 28px !important;
+
+  line-height: 1.2 !important;
+
+  font-weight: 900 !important;
+
+  text-align: center !important;
+
+  text-shadow:
+    0 0 15px
+    rgba(0, 135, 255, 0.22) !important;
+}
+
+
+.auth-card-header p {
+  margin: 0 !important;
+
+  color: #8c9eb7 !important;
+
+  font-size: 13px !important;
+
+  text-align: center !important;
+}
+
+
+/* =========================================================
+   FORMULÁRIO
+========================================================= */
+
+.auth-card form {
+  width: 100% !important;
+
+  display: flex !important;
+
+  flex-direction: column !important;
+}
+
+
+.auth-field {
+  width: 100% !important;
+
+  display: flex !important;
+
+  flex-direction: column !important;
+
+  gap: 8px !important;
+
+  margin-bottom: 18px !important;
+}
+
+
+.auth-field label {
+  color: #a7b7cb !important;
+
+  font-size: 11px !important;
+
+  font-weight: 800 !important;
+
+  letter-spacing: 1px !important;
+}
+
+
+.auth-field input {
+  width: 100% !important;
+
+  height: 50px !important;
+
+  padding: 0 15px !important;
+
+  border:
+    1px solid
+    rgba(83, 128, 182, 0.30) !important;
+
+  border-radius: 12px !important;
+
+  outline: none !important;
+
+  background:
+    rgba(1, 7, 18, 0.90) !important;
+
+  color: #ffffff !important;
+
+  font-size: 14px !important;
+
+  transition:
+    border 0.2s,
+    box-shadow 0.2s !important;
+}
+
+
+.auth-field input::placeholder {
+  color: #52627a !important;
+}
+
+
+.auth-field input:focus {
+  border-color: #00a8ff !important;
 
   box-shadow:
     0 0 0 3px
-    rgba(109, 93, 252, 0.12);
-}
-
-.channel-name-input span {
-  margin-right: 7px;
-
-  color: #6f7789;
-
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.channel-name-input input {
-  flex: 1;
-
-  min-width: 0;
-
-  border: none;
-  outline: none;
-
-  background: transparent;
-
-  color: #ffffff;
-
-  font-size: 15px;
-}
-
-.channel-name-input input::placeholder {
-  color: #515868;
-}
-
-.modal-tip {
-  margin: 9px 2px 0;
-
-  color: #61697a;
-
-  font-size: 11px;
-}
-
-.modal-error {
-  margin: 9px 2px 0;
-
-  color: #ff7373;
-
-  font-size: 12px;
-}
-
-.modal-footer {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-
-  gap: 10px;
-
-  padding: 16px 24px;
-
-  border-top: 1px solid #252a36;
-
-  background: #0e1118;
-}
-
-.modal-cancel,
-.modal-create {
-  min-height: 42px;
-
-  border: none;
-
-  border-radius: 12px;
-
-  padding: 0 18px;
-
-  font-weight: 700;
-
-  cursor: pointer;
-
-  transition: 0.2s;
-}
-
-.modal-cancel {
-  background: transparent;
-
-  color: #959cab;
-}
-
-.modal-cancel:hover {
-  background: #1b1f29;
-
-  color: #ffffff;
-}
-
-.modal-create {
-  background:
-    linear-gradient(
-      135deg,
-      #6d5dfc,
-      #4e78ff
-    );
-
-  color: #ffffff;
-
-  box-shadow:
-    0 8px 22px
-    rgba(109, 93, 252, 0.24);
-}
-
-.modal-create:hover {
-  transform: translateY(-1px);
-
-  box-shadow:
-    0 12px 28px
-    rgba(109, 93, 252, 0.32);
-}
-
-@keyframes modalFadeIn {
-  from {
-    opacity: 0;
-  }
-
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes modalScaleIn {
-  from {
-    opacity: 0;
-    transform: scale(0.96)
-      translateY(8px);
-  }
-
-  to {
-    opacity: 1;
-    transform: scale(1)
-      translateY(0);
-  }
-}
-/* =========================================
-   AÇÕES DOS CANAIS
-========================================= */
-
-.channel-row {
-  position: relative;
-  display: flex;
-  align-items: center;
-  width: 100%;
-}
-
-.channel-row .channel {
-  padding-right: 74px;
-}
-
-.channel-actions {
-  position: absolute;
-  right: 7px;
-
-  display: flex;
-  align-items: center;
-  gap: 3px;
-
-  opacity: 0;
-  pointer-events: none;
-
-  transition: 0.15s;
-}
-
-.channel-row:hover .channel-actions {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.channel-actions button {
-  width: 28px;
-  height: 28px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  border: none;
-  border-radius: 7px;
-
-  background: #131620;
-
-  color: #8e95a5;
-
-  font-size: 12px;
-
-  cursor: pointer;
-
-  transition: 0.15s;
-}
-
-.channel-actions button:hover {
-  background: #292e3d;
-  color: #ffffff;
-}
-/* =========================================
-   CONFIGURAÇÕES DO SERVIDOR
-========================================= */
-
-.workspace {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.workspace-info {
-  min-width: 0;
-}
-
-.workspace-info h2 {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.workspace-settings {
-  width: 34px;
-  height: 34px;
-
-  flex-shrink: 0;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  border: none;
-  border-radius: 10px;
-
-  background: transparent;
-
-  color: #747c8d;
-
-  cursor: pointer;
-
-  transition: 0.2s;
-}
-
-.workspace-settings:hover {
-  background: #1d2130;
-  color: #ffffff;
+      rgba(0, 153, 255, 0.12),
+    0 0 20px
+      rgba(0, 153, 255, 0.17) !important;
 }
 
 
-/* IMAGEM NA BARRA DE SERVIDORES */
+/* Chrome preenchimento automático */
 
-.server {
-  overflow: hidden;
-  padding: 0;
-}
+.auth-field input:-webkit-autofill,
+.auth-field input:-webkit-autofill:hover,
+.auth-field input:-webkit-autofill:focus {
+  -webkit-text-fill-color:
+    #ffffff !important;
 
-.server-image {
-  width: 100%;
-  height: 100%;
+  -webkit-box-shadow:
+    0 0 0 1000px
+    #07101f inset !important;
 
-  display: block;
-
-  object-fit: cover;
-}
-
-.server-file-input {
-  display: none;
+  transition:
+    background-color 5000s
+    ease-in-out 0s;
 }
 
 
-/* EDITOR DA IMAGEM */
+/* =========================================================
+   BOTÃO ENTRAR
+========================================================= */
 
-.server-icon-editor {
-  display: flex;
-  align-items: center;
+.auth-submit {
+  width: 100% !important;
 
-  gap: 16px;
+  min-height: 52px !important;
 
-  padding: 16px;
+  margin-top: 4px !important;
 
-  margin-bottom: 22px;
+  padding: 0 20px !important;
 
-  border: 1px solid #292e3d;
+  border: none !important;
 
-  border-radius: 16px;
-
-  background: #0e1118;
-}
-
-.server-icon-preview {
-  width: 74px;
-  height: 74px;
-
-  flex-shrink: 0;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  overflow: hidden;
-
-  border-radius: 22px;
-
-  background: linear-gradient(
-    135deg,
-    #6d5dfc,
-    #3c8cff
-  );
-
-  color: #ffffff;
-
-  font-size: 21px;
-  font-weight: 800;
-}
-
-.server-icon-preview img {
-  width: 100%;
-  height: 100%;
-
-  object-fit: cover;
-}
-
-.server-icon-options {
-  flex: 1;
-
-  display: flex;
-  flex-direction: column;
-
-  gap: 5px;
-}
-
-.server-icon-options strong {
-  color: #ffffff;
-
-  font-size: 14px;
-}
-
-.server-icon-options span {
-  color: #707889;
-
-  font-size: 11px;
-}
-
-.server-image-buttons {
-  display: flex;
-  align-items: center;
-
-  gap: 8px;
-
-  margin-top: 8px;
-}
-
-.server-upload-button,
-.server-remove-image {
-  min-height: 34px;
-
-  padding: 0 12px;
-
-  border: none;
-
-  border-radius: 9px;
-
-  font-size: 12px;
-  font-weight: 700;
-
-  cursor: pointer;
-
-  transition: 0.2s;
-}
-
-.server-upload-button {
-  background: #262b3a;
-  color: #ffffff;
-}
-
-.server-upload-button:hover {
-  background: #303647;
-}
-
-.server-remove-image {
-  background: transparent;
-
-  color: #ff7474;
-}
-
-.server-remove-image:hover {
-  background: rgba(
-    255,
-    80,
-    80,
-    0.1
-  );
-}
-
-
-/* ZONA DE PERIGO */
-
-.danger-zone {
-  display: flex;
-
-  align-items: center;
-
-  justify-content: space-between;
-
-  gap: 16px;
-
-  margin-top: 24px;
-
-  padding: 16px;
-
-  border: 1px solid
-    rgba(255, 80, 80, 0.25);
-
-  border-radius: 14px;
-
-  background: rgba(
-    255,
-    80,
-    80,
-    0.04
-  );
-}
-
-.danger-zone > div {
-  display: flex;
-  flex-direction: column;
-
-  gap: 4px;
-}
-
-.danger-zone strong {
-  color: #ffffff;
-
-  font-size: 13px;
-}
-
-.danger-zone span {
-  color: #737b8c;
-
-  font-size: 11px;
-}
-
-.danger-zone button {
-  min-height: 36px;
-
-  padding: 0 14px;
-
-  border: 1px solid
-    rgba(255, 90, 90, 0.4);
-
-  border-radius: 10px;
-
-  background: transparent;
-
-  color: #ff7474;
-
-  font-weight: 700;
-
-  cursor: pointer;
-
-  transition: 0.2s;
-}
-
-.danger-zone button:hover {
-  background: #e5484d;
-
-  border-color: #e5484d;
-
-  color: #ffffff;
-}
-/* PERFIL DO USUÁRIO */
-
-.profile-clickable {
-  cursor: pointer;
-}
-
-.profile-clickable:hover {
-  background: #11151d;
-}
-
-.avatar {
-  overflow: hidden;
-}
-
-.profile-avatar-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.profile-modal {
-  max-width: 500px;
-}
-
-.profile-editor {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-
-  padding: 16px;
-
-  margin-bottom: 22px;
-
-  border: 1px solid #292e3d;
-
-  border-radius: 16px;
-
-  background: #0e1118;
-}
-
-.profile-big-avatar {
-  width: 86px;
-  height: 86px;
-
-  flex-shrink: 0;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  overflow: hidden;
-
-  border-radius: 26px;
+  border-radius: 12px !important;
 
   background:
     linear-gradient(
-      135deg,
-      #6d5dfc,
-      #3c8cff
-    );
+      90deg,
+      #006eff 0%,
+      #009dff 48%,
+      #00c8ff 100%
+    ) !important;
 
-  color: white;
+  color: #ffffff !important;
 
-  font-size: 28px;
-  font-weight: 800;
+  font-size: 14px !important;
+
+  font-weight: 900 !important;
+
+  cursor: pointer !important;
+
+  box-shadow:
+    0 8px 30px
+      rgba(0, 117, 255, 0.35),
+    0 0 20px
+      rgba(0, 183, 255, 0.20) !important;
+
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s,
+    filter 0.2s !important;
 }
 
-.profile-big-avatar img {
-  width: 100%;
-  height: 100%;
 
-  object-fit: cover;
+.auth-submit:hover {
+  transform:
+    translateY(-2px) !important;
+
+  filter:
+    brightness(1.08) !important;
+
+  box-shadow:
+    0 12px 35px
+      rgba(0, 117, 255, 0.48),
+    0 0 28px
+      rgba(0, 183, 255, 0.30) !important;
 }
 
-.profile-photo-options {
-  display: flex;
-  flex-direction: column;
 
-  gap: 6px;
+.auth-submit:active {
+  transform:
+    translateY(0) !important;
 }
 
-.profile-photo-options strong {
-  color: white;
 
-  font-size: 14px;
+.auth-submit:disabled {
+  opacity: 0.55 !important;
+
+  cursor: not-allowed !important;
 }
 
-.profile-photo-options span {
-  color: #707889;
 
-  font-size: 11px;
+/* =========================================================
+   ESQUECEU SUA SENHA
+========================================================= */
+
+.auth-card form > button[type="button"] {
+  color: #15b7ff !important;
 }
 
-.profile-photo-buttons {
-  display: flex;
 
-  gap: 8px;
-
-  margin-top: 7px;
+.auth-card form > button[type="button"]:hover {
+  color: #75d7ff !important;
 }
 
-.profile-status-label {
-  margin-top: 18px !important;
+
+/* =========================================================
+   CRIAR CONTA
+========================================================= */
+
+.auth-switch {
+  width: 100% !important;
+
+  margin-top: 22px !important;
+
+  color: #8290a5 !important;
+
+  font-size: 12px !important;
+
+  text-align: center !important;
 }
 
-.profile-email-box {
-  display: flex;
-  flex-direction: column;
 
-  gap: 5px;
+.auth-switch button {
+  padding: 0 !important;
 
-  margin-top: 20px;
+  border: none !important;
 
-  padding: 14px;
+  background: transparent !important;
 
-  border-radius: 13px;
+  color: #19b9ff !important;
 
-  background: #0e1118;
+  font-size: 12px !important;
 
-  border: 1px solid #292e3d;
+  font-weight: 800 !important;
+
+  cursor: pointer !important;
 }
 
-.profile-email-box span {
-  color: #666f80;
 
-  font-size: 10px;
-  font-weight: 800;
-
-  letter-spacing: 0.6px;
+.auth-switch button:hover {
+  color: #79dcff !important;
 }
 
-.profile-email-box strong {
-  color: #d4d7df;
 
-  font-size: 13px;
+/* =========================================================
+   ERROS
+========================================================= */
+
+.auth-error {
+  width: 100% !important;
+
+  margin:
+    0 0 16px !important;
+
+  padding:
+    12px 14px !important;
+
+  border-radius:
+    10px !important;
+
+  border:
+    1px solid
+    rgba(255, 83, 104, 0.32) !important;
+
+  background:
+    rgba(255, 50, 76, 0.08) !important;
+
+  color:
+    #ff7688 !important;
+
+  font-size:
+    12px !important;
 }
 
-.member-avatar {
-  overflow: visible;
+
+/* =========================================================
+   LOGO DENTRO DO APLICATIVO
+========================================================= */
+
+.logo {
+  overflow: hidden !important;
+
+  padding: 0 !important;
+
+  background: #010813 !important;
+
+  border:
+    1px solid
+    rgba(0, 174, 255, 0.60) !important;
+
+  box-shadow:
+    0 0 10px
+      rgba(0, 174, 255, 0.55),
+    0 0 25px
+      rgba(0, 102, 255, 0.25) !important;
 }
 
-.member-profile-image {
-  width: 100%;
-  height: 100%;
 
-  object-fit: cover;
+.logo img {
+  width: 100% !important;
 
-  border-radius: 11px;
-}
-/* AMIGOS */
+  height: 100% !important;
 
-.friends-modal {
-  max-width: 520px;
+  object-fit: cover !important;
+
+  display: block !important;
 }
 
-.friend-add-row {
-  display: flex;
-  gap: 10px;
-}
 
-.friend-add-row input {
-  flex: 1;
+/* =========================================================
+   RESPONSIVO
+========================================================= */
 
-  height: 44px;
+@media (max-width: 700px) {
 
-  border: 1px solid #292e3d;
+  .auth-page {
+    padding:
+      140px 18px 25px !important;
+  }
 
-  border-radius: 11px;
 
-  padding: 0 13px;
+  .auth-brand {
+    top: 20px !important;
+  }
 
-  outline: none;
 
-  background: #0d1017;
+  .auth-logo {
+    width: 60px !important;
+    height: 60px !important;
 
-  color: white;
-}
+    min-width: 60px !important;
+    min-height: 60px !important;
+  }
 
-.friend-add-row button {
-  padding: 0 16px;
 
-  border: none;
+  .auth-brand h1 {
+    font-size: 32px !important;
 
-  border-radius: 11px;
+    letter-spacing: 4px !important;
+  }
 
-  background: #6d5dfc;
 
-  color: white;
+  .auth-brand p {
+    font-size: 10px !important;
 
-  cursor: pointer;
-}
+    letter-spacing: 1px !important;
+  }
 
-.friends-section {
-  margin-top: 25px;
-}
 
-.friends-section h3 {
-  margin-bottom: 12px;
+  .auth-card {
+    max-width: 390px !important;
 
-  color: #6f7788;
+    padding:
+      28px 22px !important;
+  }
 
-  font-size: 11px;
-}
 
-.friend-request {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-
-  padding: 10px;
-
-  margin-bottom: 6px;
-
-  border-radius: 10px;
-
-  background: #151923;
-}
-
-.friend-request > div {
-  display: flex;
-  gap: 6px;
-}
-
-.friend-request button {
-  width: 32px;
-  height: 32px;
-
-  border: none;
-
-  border-radius: 9px;
-
-  cursor: pointer;
-}
-
-.friend-accept {
-  background: #1f6b47;
-
-  color: white;
-}
-
-.friend-reject {
-  background: #682e34;
-
-  color: white;
-}
-
-.friend-list-item {
-  width: 100%;
-
-  padding: 11px;
-
-  margin-bottom: 5px;
-
-  border: none;
-
-  border-radius: 10px;
-
-  background: #151923;
-
-  color: #d9dde7;
-
-  text-align: left;
-
-  cursor: pointer;
-}
-
-.friend-list-item:hover {
-  background: #1d2230;
-}
-
-.empty-friends {
-  color: #656d7c;
-
-  font-size: 12px;
+  .auth-card-header h2 {
+    font-size: 24px !important;
+  }
 }
