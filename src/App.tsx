@@ -4,12 +4,14 @@ import type {
   FormEvent,
   KeyboardEvent,
 } from "react";
-import type {
-  User as SupabaseUser,
-} from "@supabase/supabase-js";
+import type { User as SupabaseUser } from "@supabase/supabase-js";
 
 import "./App.css";
 import { supabase } from "./lib/supabase";
+
+/* =========================================================
+   TIPOS
+========================================================= */
 
 type Profile = {
   id: string;
@@ -57,11 +59,36 @@ type Member = {
   role: string;
 };
 
+type FriendshipRow = {
+  id: string;
+  requester_id: string;
+  addressee_id: string;
+  status: "pending" | "accepted";
+  created_at: string;
+};
+
+type FriendItem = {
+  friendship_id: string;
+  user: Profile;
+  created_at: string;
+};
+
+type DirectMessage = {
+  id: string;
+  sender_id: string;
+  receiver_id: string;
+  content: string;
+  created_at: string;
+};
+
+type MainMode = "server" | "friends" | "dm";
+
+/* =========================================================
+   FUNÇÕES AUXILIARES
+========================================================= */
+
 function createShortName(name: string) {
-  const words = name
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
+  const words = name.trim().split(/\s+/).filter(Boolean);
 
   if (words.length >= 2) {
     return `${words[0][0]}${words[1][0]}`.toUpperCase();
@@ -81,11 +108,8 @@ function normalizeChannelName(name: string) {
 }
 
 function isRecoveryUrl() {
-  const hash =
-    window.location.hash.toLowerCase();
-
-  const search =
-    window.location.search.toLowerCase();
+  const hash = window.location.hash.toLowerCase();
+  const search = window.location.search.toLowerCase();
 
   return (
     hash.includes("type=recovery") ||
@@ -94,32 +118,20 @@ function isRecoveryUrl() {
 }
 
 function getInitialInviteCode() {
-  const code =
-    new URLSearchParams(
-      window.location.search
-    )
-      .get("invite")
-      ?.trim();
+  const code = new URLSearchParams(window.location.search)
+    .get("invite")
+    ?.trim();
 
   if (code) {
-    localStorage.setItem(
-      "conexao_pending_invite",
-      code
-    );
-
+    localStorage.setItem("conexao_pending_invite", code);
     return code;
   }
 
-  return (
-    localStorage.getItem(
-      "conexao_pending_invite"
-    ) || ""
-  );
+  return localStorage.getItem("conexao_pending_invite") || "";
 }
 
 function removeInviteFromUrl() {
-  const url =
-    new URL(window.location.href);
+  const url = new URL(window.location.href);
 
   url.searchParams.delete("invite");
 
@@ -135,756 +147,375 @@ function compressImage(
   maxSize = 512,
   quality = 0.8
 ): Promise<string> {
-  return new Promise(
-    (resolve, reject) => {
-      const reader =
-        new FileReader();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
 
-      reader.onload = () => {
-        const image =
-          new Image();
+    reader.onload = () => {
+      const image = new Image();
 
-        image.onload = () => {
-          let width =
-            image.width;
+      image.onload = () => {
+        let width = image.width;
+        let height = image.height;
 
-          let height =
-            image.height;
-
-          if (
-            width > maxSize ||
-            height > maxSize
-          ) {
-            if (width > height) {
-              height =
-                Math.round(
-                  (height *
-                    maxSize) /
-                    width
-                );
-
-              width =
-                maxSize;
-            } else {
-              width =
-                Math.round(
-                  (width *
-                    maxSize) /
-                    height
-                );
-
-              height =
-                maxSize;
-            }
+        if (width > maxSize || height > maxSize) {
+          if (width > height) {
+            height = Math.round((height * maxSize) / width);
+            width = maxSize;
+          } else {
+            width = Math.round((width * maxSize) / height);
+            height = maxSize;
           }
+        }
 
-          const canvas =
-            document.createElement(
-              "canvas"
-            );
+        const canvas = document.createElement("canvas");
 
-          canvas.width =
-            width;
+        canvas.width = width;
+        canvas.height = height;
 
-          canvas.height =
-            height;
+        const context = canvas.getContext("2d");
 
-          const context =
-            canvas.getContext(
-              "2d"
-            );
+        if (!context) {
+          reject(new Error("Não foi possível processar a imagem."));
+          return;
+        }
 
-          if (!context) {
-            reject(
-              new Error(
-                "Não foi possível processar a imagem."
-              )
-            );
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = "high";
 
-            return;
-          }
+        context.drawImage(image, 0, 0, width, height);
 
-          context.imageSmoothingEnabled =
-            true;
-
-          context.imageSmoothingQuality =
-            "high";
-
-          context.drawImage(
-            image,
-            0,
-            0,
-            width,
-            height
-          );
-
-          resolve(
-            canvas.toDataURL(
-              "image/webp",
-              quality
-            )
-          );
-        };
-
-        image.onerror =
-          () => {
-            reject(
-              new Error(
-                "Não foi possível abrir a imagem."
-              )
-            );
-          };
-
-        image.src =
-          reader.result as string;
+        resolve(canvas.toDataURL("image/webp", quality));
       };
 
-      reader.onerror =
-        () => {
-          reject(
-            new Error(
-              "Não foi possível ler a imagem."
-            )
-          );
-        };
+      image.onerror = () => {
+        reject(new Error("Não foi possível abrir a imagem."));
+      };
 
-      reader.readAsDataURL(
-        file
-      );
-    }
-  );
+      image.src = reader.result as string;
+    };
+
+    reader.onerror = () => {
+      reject(new Error("Não foi possível ler a imagem."));
+    };
+
+    reader.readAsDataURL(file);
+  });
 }
 
+/* =========================================================
+   APP
+========================================================= */
+
 function App() {
-  const profileFileInputRef =
-    useRef<HTMLInputElement>(
-      null
-    );
+  const profileFileInputRef = useRef<HTMLInputElement>(null);
+  const serverFileInputRef = useRef<HTMLInputElement>(null);
 
-  const serverFileInputRef =
-    useRef<HTMLInputElement>(
-      null
-    );
+  const inviteProcessingRef = useRef(false);
 
-  const inviteProcessingRef =
-    useRef(false);
-
-  /* =========================================
+  /* =======================================================
      AUTENTICAÇÃO
-  ========================================= */
+  ======================================================= */
 
-  const [
-    authUser,
-    setAuthUser,
-  ] =
-    useState<SupabaseUser | null>(
-      null
-    );
+  const [authUser, setAuthUser] =
+    useState<SupabaseUser | null>(null);
 
-  const [
-    currentUser,
-    setCurrentUser,
-  ] =
-    useState<Profile | null>(
-      null
-    );
+  const [currentUser, setCurrentUser] =
+    useState<Profile | null>(null);
 
-  const [
-    authChecking,
-    setAuthChecking,
-  ] =
-    useState(true);
+  const [authChecking, setAuthChecking] = useState(true);
+  const [authLoading, setAuthLoading] = useState(false);
 
-  const [
-    authLoading,
-    setAuthLoading,
-  ] =
+  const [authMode, setAuthMode] =
+    useState<"login" | "register">("login");
+
+  const [authName, setAuthName] = useState("");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authConfirmPassword, setAuthConfirmPassword] =
+    useState("");
+
+  const [authError, setAuthError] = useState("");
+  const [authSuccess, setAuthSuccess] = useState("");
+
+  const [lastSignupEmail, setLastSignupEmail] = useState("");
+  const [resendLoading, setResendLoading] = useState(false);
+
+  /* =======================================================
+     RECUPERAÇÃO DE SENHA
+  ======================================================= */
+
+  const [showForgotPassword, setShowForgotPassword] =
     useState(false);
 
-  const [
-    authMode,
-    setAuthMode,
-  ] =
-    useState<
-      "login" | "register"
-    >("login");
+  const [recoveryEmail, setRecoveryEmail] = useState("");
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
+  const [recoveryError, setRecoveryError] = useState("");
+  const [recoverySuccess, setRecoverySuccess] = useState("");
 
-  const [
-    authName,
-    setAuthName,
-  ] =
+  const [passwordRecoveryMode, setPasswordRecoveryMode] =
+    useState(() => isRecoveryUrl());
+
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] =
     useState("");
 
-  const [
-    authEmail,
-    setAuthEmail,
-  ] =
-    useState("");
-
-  const [
-    authPassword,
-    setAuthPassword,
-  ] =
-    useState("");
-
-  const [
-    authConfirmPassword,
-    setAuthConfirmPassword,
-  ] =
-    useState("");
-
-  const [
-    authError,
-    setAuthError,
-  ] =
-    useState("");
-
-  const [
-    authSuccess,
-    setAuthSuccess,
-  ] =
-    useState("");
-
-  const [
-    lastSignupEmail,
-    setLastSignupEmail,
-  ] =
-    useState("");
-
-  const [
-    resendLoading,
-    setResendLoading,
-  ] =
+  const [newPasswordLoading, setNewPasswordLoading] =
     useState(false);
 
-  /* =========================================
-     REDEFINIÇÃO DE SENHA
-  ========================================= */
-
-  const [
-    showForgotPassword,
-    setShowForgotPassword,
-  ] =
-    useState(false);
-
-  const [
-    recoveryEmail,
-    setRecoveryEmail,
-  ] =
+  const [newPasswordError, setNewPasswordError] =
     useState("");
 
-  const [
-    recoveryLoading,
-    setRecoveryLoading,
-  ] =
-    useState(false);
-
-  const [
-    recoveryError,
-    setRecoveryError,
-  ] =
-    useState("");
-
-  const [
-    recoverySuccess,
-    setRecoverySuccess,
-  ] =
-    useState("");
-
-  const [
-    passwordRecoveryMode,
-    setPasswordRecoveryMode,
-  ] =
-    useState(() =>
-      isRecoveryUrl()
-    );
-
-  const [
-    newPassword,
-    setNewPassword,
-  ] =
-    useState("");
-
-  const [
-    confirmNewPassword,
-    setConfirmNewPassword,
-  ] =
-    useState("");
-
-  const [
-    newPasswordLoading,
-    setNewPasswordLoading,
-  ] =
-    useState(false);
-
-  const [
-    newPasswordError,
-    setNewPasswordError,
-  ] =
-    useState("");
-
-  /* =========================================
+  /* =======================================================
      CONVITES
-  ========================================= */
+  ======================================================= */
 
-  const [
-    pendingInviteCode,
-    setPendingInviteCode,
-  ] =
-    useState(
-      getInitialInviteCode
-    );
+  const [pendingInviteCode, setPendingInviteCode] =
+    useState(getInitialInviteCode);
 
-  const [
-    joinInviteLoading,
-    setJoinInviteLoading,
-  ] =
+  const [joinInviteLoading, setJoinInviteLoading] =
     useState(false);
 
-  const [
-    joinInviteError,
-    setJoinInviteError,
-  ] =
-    useState("");
+  const [joinInviteError, setJoinInviteError] = useState("");
+  const [joinInviteSuccess, setJoinInviteSuccess] = useState("");
 
-  const [
-    joinInviteSuccess,
-    setJoinInviteSuccess,
-  ] =
-    useState("");
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteLink, setInviteLink] = useState("");
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteError, setInviteError] = useState("");
+  const [inviteCopied, setInviteCopied] = useState(false);
 
-  const [
-    showInviteModal,
-    setShowInviteModal,
-  ] =
+  /* =======================================================
+     NAVEGAÇÃO
+  ======================================================= */
+
+  const [mainMode, setMainMode] =
+    useState<MainMode>("server");
+
+  /* =======================================================
+     SERVIDORES / CHAT
+  ======================================================= */
+
+  const [appLoading, setAppLoading] = useState(false);
+
+  const [servers, setServers] = useState<Server[]>([]);
+
+  const [currentServerId, setCurrentServerId] =
+    useState<string | null>(null);
+
+  const [channels, setChannels] = useState<Channel[]>([]);
+
+  const [currentChannelId, setCurrentChannelId] =
+    useState<string | null>(null);
+
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+
+  const [members, setMembers] = useState<Member[]>([]);
+
+  const [message, setMessage] = useState("");
+
+  /* =======================================================
+     AMIGOS
+  ======================================================= */
+
+  const [friends, setFriends] = useState<FriendItem[]>([]);
+
+  const [incomingRequests, setIncomingRequests] =
+    useState<FriendItem[]>([]);
+
+  const [outgoingRequests, setOutgoingRequests] =
+    useState<FriendItem[]>([]);
+
+  const [friendsLoading, setFriendsLoading] = useState(false);
+
+  const [friendEmail, setFriendEmail] = useState("");
+
+  const [friendError, setFriendError] = useState("");
+  const [friendSuccess, setFriendSuccess] = useState("");
+
+  const [friendActionLoading, setFriendActionLoading] =
     useState(false);
 
-  const [
-    inviteLink,
-    setInviteLink,
-  ] =
-    useState("");
+  /* =======================================================
+     DM
+  ======================================================= */
 
-  const [
-    inviteLoading,
-    setInviteLoading,
-  ] =
-    useState(false);
+  const [activeDmUser, setActiveDmUser] =
+    useState<Profile | null>(null);
 
-  const [
-    inviteError,
-    setInviteError,
-  ] =
-    useState("");
+  const [directMessages, setDirectMessages] =
+    useState<DirectMessage[]>([]);
 
-  const [
-    inviteCopied,
-    setInviteCopied,
-  ] =
-    useState(false);
+  const [dmText, setDmText] = useState("");
 
-  /* =========================================
-     APP
-  ========================================= */
+  const [dmLoading, setDmLoading] = useState(false);
 
-  const [
-    appLoading,
-    setAppLoading,
-  ] =
-    useState(false);
-
-  const [
-    servers,
-    setServers,
-  ] =
-    useState<Server[]>([]);
-
-  const [
-    currentServerId,
-    setCurrentServerId,
-  ] =
-    useState<
-      string | null
-    >(null);
-
-  const [
-    channels,
-    setChannels,
-  ] =
-    useState<Channel[]>([]);
-
-  const [
-    currentChannelId,
-    setCurrentChannelId,
-  ] =
-    useState<
-      string | null
-    >(null);
-
-  const [
-    messages,
-    setMessages,
-  ] =
-    useState<
-      ChatMessage[]
-    >([]);
-
-  const [
-    members,
-    setMembers,
-  ] =
-    useState<Member[]>([]);
-
-  const [
-    message,
-    setMessage,
-  ] =
-    useState("");
-
-  /* =========================================
+  /* =======================================================
      PERFIL
-  ========================================= */
+  ======================================================= */
 
-  const [
-    showProfile,
-    setShowProfile,
-  ] =
+  const [showProfile, setShowProfile] = useState(false);
+  const [profileName, setProfileName] = useState("");
+  const [profileStatus, setProfileStatus] = useState("");
+  const [profileError, setProfileError] = useState("");
+  const [profileSaving, setProfileSaving] = useState(false);
+
+  const [profileImageLoading, setProfileImageLoading] =
     useState(false);
 
-  const [
-    profileName,
-    setProfileName,
-  ] =
-    useState("");
-
-  const [
-    profileStatus,
-    setProfileStatus,
-  ] =
-    useState("");
-
-  const [
-    profileError,
-    setProfileError,
-  ] =
-    useState("");
-
-  const [
-    profileSaving,
-    setProfileSaving,
-  ] =
-    useState(false);
-
-  const [
-    profileImageLoading,
-    setProfileImageLoading,
-  ] =
-    useState(false);
-
-  /* =========================================
+  /* =======================================================
      SERVIDOR
-  ========================================= */
+  ======================================================= */
 
-  const [
-    showCreateServer,
-    setShowCreateServer,
-  ] =
-    useState(false);
+  const [showCreateServer, setShowCreateServer] = useState(false);
 
-  const [
-    newServerName,
-    setNewServerName,
-  ] =
+  const [newServerName, setNewServerName] = useState("");
+
+  const [serverError, setServerError] = useState("");
+
+  const [showEditServer, setShowEditServer] = useState(false);
+
+  const [editingServerName, setEditingServerName] =
     useState("");
 
-  const [
-    serverError,
-    setServerError,
-  ] =
+  const [editServerError, setEditServerError] = useState("");
+
+  const [inviteEmail, setInviteEmail] = useState("");
+
+  const [inviteMemberError, setInviteMemberError] =
     useState("");
 
-  const [
-    showEditServer,
-    setShowEditServer,
-  ] =
-    useState(false);
-
-  const [
-    editingServerName,
-    setEditingServerName,
-  ] =
+  const [inviteMemberSuccess, setInviteMemberSuccess] =
     useState("");
 
-  const [
-    editServerError,
-    setEditServerError,
-  ] =
-    useState("");
-
-  const [
-    inviteEmail,
-    setInviteEmail,
-  ] =
-    useState("");
-
-  const [
-    inviteMemberError,
-    setInviteMemberError,
-  ] =
-    useState("");
-
-  const [
-    inviteMemberSuccess,
-    setInviteMemberSuccess,
-  ] =
-    useState("");
-
-  /* =========================================
+  /* =======================================================
      CANAIS
-  ========================================= */
+  ======================================================= */
 
-  const [
-    showCreateChannel,
-    setShowCreateChannel,
-  ] =
+  const [showCreateChannel, setShowCreateChannel] =
     useState(false);
 
-  const [
-    newChannelName,
-    setNewChannelName,
-  ] =
-    useState("");
+  const [newChannelName, setNewChannelName] = useState("");
 
-  const [
-    channelError,
-    setChannelError,
-  ] =
-    useState("");
+  const [channelError, setChannelError] = useState("");
 
-  const [
-    showEditChannel,
-    setShowEditChannel,
-  ] =
+  const [showEditChannel, setShowEditChannel] =
     useState(false);
 
-  const [
-    editingChannelId,
-    setEditingChannelId,
-  ] =
+  const [editingChannelId, setEditingChannelId] = useState("");
+
+  const [editingChannelName, setEditingChannelName] =
     useState("");
 
-  const [
-    editingChannelName,
-    setEditingChannelName,
-  ] =
+  const [editChannelError, setEditChannelError] =
     useState("");
 
-  const [
-    editChannelError,
-    setEditChannelError,
-  ] =
-    useState("");
+  /* =======================================================
+     DADOS ATUAIS
+  ======================================================= */
 
   const currentServer =
-    servers.find(
-      (server) =>
-        server.id ===
-        currentServerId
-    ) || null;
+    servers.find((server) => server.id === currentServerId) ||
+    null;
 
   const currentChannel =
-    channels.find(
-      (channel) =>
-        channel.id ===
-        currentChannelId
-    ) || null;
+    channels.find((channel) => channel.id === currentChannelId) ||
+    null;
 
   const isServerOwner =
     !!currentServer &&
     !!currentUser &&
-    currentServer.owner_id ===
-      currentUser.id;
+    currentServer.owner_id === currentUser.id;
 
-  /* =========================================
-     PERFIL DO USUÁRIO
-  ========================================= */
+  /* =======================================================
+     PERFIL
+  ======================================================= */
 
-  async function loadProfile(
-    user: SupabaseUser
-  ) {
-    const {
-      data,
-      error,
-    } =
-      await supabase
-        .from("profiles")
-        .select(
-          "id,name,email,avatar_url,status"
-        )
-        .eq(
-          "id",
-          user.id
-        )
-        .single();
+  async function loadProfile(user: SupabaseUser) {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id,name,email,avatar_url,status")
+      .eq("id", user.id)
+      .single();
 
     if (error) {
-      console.error(
-        "Erro ao carregar perfil:",
-        error
-      );
-
-      setCurrentUser(
-        null
-      );
-
+      console.error("Erro ao carregar perfil:", error);
+      setCurrentUser(null);
       return;
     }
 
-    setCurrentUser(
-      data as Profile
-    );
+    setCurrentUser(data as Profile);
   }
 
-  /* =========================================
+  /* =======================================================
      SESSÃO
-  ========================================= */
+  ======================================================= */
 
   useEffect(() => {
-    let mounted =
-      true;
+    let mounted = true;
 
     async function startAuth() {
-      const {
-        data,
-        error,
-      } =
-        await supabase.auth.getSession();
+      const { data, error } = await supabase.auth.getSession();
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       if (error) {
-        console.error(
-          error
-        );
-
-        setAuthChecking(
-          false
-        );
-
+        console.error(error);
+        setAuthChecking(false);
         return;
       }
 
-      const user =
-        data.session
-          ?.user ||
-        null;
+      const user = data.session?.user || null;
 
-      setAuthUser(
-        user
-      );
+      setAuthUser(user);
 
-      if (
-        user &&
-        !isRecoveryUrl()
-      ) {
-        await loadProfile(
-          user
-        );
+      if (user && !isRecoveryUrl()) {
+        await loadProfile(user);
       }
 
       if (mounted) {
-        setAuthChecking(
-          false
-        );
+        setAuthChecking(false);
       }
     }
 
     void startAuth();
 
     const {
-      data: {
-        subscription,
-      },
-    } =
-      supabase.auth.onAuthStateChange(
-        (
-          event,
-          session
-        ) => {
-          const user =
-            session?.user ||
-            null;
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      const user = session?.user || null;
 
-          if (
-            event ===
-            "PASSWORD_RECOVERY"
-          ) {
-            setPasswordRecoveryMode(
-              true
-            );
+      if (event === "PASSWORD_RECOVERY") {
+        setPasswordRecoveryMode(true);
 
-            setAuthUser(
-              user
-            );
+        setAuthUser(user);
+        setCurrentUser(null);
 
-            setCurrentUser(
-              null
-            );
+        setShowForgotPassword(false);
 
-            setShowForgotPassword(
-              false
-            );
+        setNewPassword("");
+        setConfirmNewPassword("");
+        setNewPasswordError("");
 
-            setNewPassword(
-              ""
-            );
+        setAuthChecking(false);
 
-            setConfirmNewPassword(
-              ""
-            );
+        return;
+      }
 
-            setNewPasswordError(
-              ""
-            );
+      setAuthUser(user);
 
-            setAuthChecking(
-              false
-            );
+      if (user && !isRecoveryUrl()) {
+        void loadProfile(user);
+      }
 
-            return;
-          }
+      if (!user) {
+        setCurrentUser(null);
+      }
 
-          setAuthUser(
-            user
-          );
-
-          if (
-            user &&
-            !isRecoveryUrl()
-          ) {
-            void loadProfile(
-              user
-            );
-          }
-
-          if (!user) {
-            setCurrentUser(
-              null
-            );
-          }
-
-          setAuthChecking(
-            false
-          );
-        }
-      );
+      setAuthChecking(false);
+    });
 
     return () => {
-      mounted =
-        false;
-
+      mounted = false;
       subscription.unsubscribe();
     };
   }, []);
@@ -894,459 +525,243 @@ function App() {
     setAuthSuccess("");
   }
 
-  function changeAuthMode(
-    mode:
-      | "login"
-      | "register"
-  ) {
-    setAuthMode(
-      mode
-    );
+  function changeAuthMode(mode: "login" | "register") {
+    setAuthMode(mode);
 
-    setAuthError(
-      ""
-    );
+    setAuthError("");
+    setAuthSuccess("");
 
-    setAuthSuccess(
-      ""
-    );
+    setAuthPassword("");
+    setAuthConfirmPassword("");
 
-    setAuthPassword(
-      ""
-    );
-
-    setAuthConfirmPassword(
-      ""
-    );
-
-    setShowForgotPassword(
-      false
-    );
+    setShowForgotPassword(false);
   }
 
-  /* =========================================
+  /* =======================================================
      CADASTRO
-  ========================================= */
+  ======================================================= */
 
-  async function handleRegister(
-    event: FormEvent
-  ) {
+  async function handleRegister(event: FormEvent) {
     event.preventDefault();
 
     clearAuthMessages();
 
-    const name =
-      authName.trim();
+    const name = authName.trim();
 
-    const email =
-      authEmail
-        .trim()
-        .toLowerCase();
+    const email = authEmail.trim().toLowerCase();
 
     if (!name) {
-      setAuthError(
-        "Digite seu nome."
-      );
-
+      setAuthError("Digite seu nome.");
       return;
     }
 
-    if (
-      !email ||
-      !email.includes(
-        "@"
-      )
-    ) {
-      setAuthError(
-        "Digite um e-mail válido."
-      );
-
+    if (!email || !email.includes("@")) {
+      setAuthError("Digite um e-mail válido.");
       return;
     }
 
-    if (
-      authPassword.length <
-      6
-    ) {
+    if (authPassword.length < 6) {
       setAuthError(
         "A senha precisa ter pelo menos 6 caracteres."
       );
-
       return;
     }
 
-    if (
-      authPassword !==
-      authConfirmPassword
-    ) {
-      setAuthError(
-        "As senhas não são iguais."
-      );
-
+    if (authPassword !== authConfirmPassword) {
+      setAuthError("As senhas não são iguais.");
       return;
     }
 
-    setAuthLoading(
-      true
-    );
+    setAuthLoading(true);
 
-    const redirectUrl =
-      pendingInviteCode
-        ? `${
-            window
-              .location
-              .origin
-          }/?invite=${encodeURIComponent(
-            pendingInviteCode
-          )}`
-        : window
-            .location
-            .origin;
+    const redirectUrl = pendingInviteCode
+      ? `${window.location.origin}/?invite=${encodeURIComponent(
+          pendingInviteCode
+        )}`
+      : window.location.origin;
 
-    const {
-      data,
-      error,
-    } =
-      await supabase.auth.signUp(
-        {
-          email,
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password: authPassword,
 
-          password:
-            authPassword,
+      options: {
+        data: {
+          name,
+          status: "Online",
+        },
 
-          options: {
-            data: {
-              name,
-              status:
-                "Online",
-            },
+        emailRedirectTo: redirectUrl,
+      },
+    });
 
-            emailRedirectTo:
-              redirectUrl,
-          },
-        }
-      );
-
-    setAuthLoading(
-      false
-    );
+    setAuthLoading(false);
 
     if (error) {
-      setAuthError(
-        error.message
-      );
-
+      setAuthError(error.message);
       return;
     }
 
     if (!data.session) {
-      setLastSignupEmail(
-        email
-      );
+      setLastSignupEmail(email);
 
       setAuthSuccess(
         `Conta criada. Enviamos um e-mail de confirmação para ${email}.`
       );
 
-      setAuthMode(
-        "login"
-      );
+      setAuthMode("login");
 
-      setAuthName(
-        ""
-      );
-
-      setAuthPassword(
-        ""
-      );
-
-      setAuthConfirmPassword(
-        ""
-      );
+      setAuthName("");
+      setAuthPassword("");
+      setAuthConfirmPassword("");
 
       return;
     }
 
     if (data.user) {
-      setAuthUser(
-        data.user
-      );
-
-      await loadProfile(
-        data.user
-      );
+      setAuthUser(data.user);
+      await loadProfile(data.user);
     }
   }
 
-  /* =========================================
+  /* =======================================================
      LOGIN
-  ========================================= */
+  ======================================================= */
 
-  async function handleLogin(
-    event: FormEvent
-  ) {
+  async function handleLogin(event: FormEvent) {
     event.preventDefault();
 
     clearAuthMessages();
 
-    const email =
-      authEmail
-        .trim()
-        .toLowerCase();
+    const email = authEmail.trim().toLowerCase();
 
     if (!email) {
-      setAuthError(
-        "Digite seu e-mail."
-      );
-
+      setAuthError("Digite seu e-mail.");
       return;
     }
 
     if (!authPassword) {
-      setAuthError(
-        "Digite sua senha."
-      );
-
+      setAuthError("Digite sua senha.");
       return;
     }
 
-    setAuthLoading(
-      true
-    );
+    setAuthLoading(true);
 
-    const {
-      data,
-      error,
-    } =
-      await supabase.auth.signInWithPassword(
-        {
-          email,
+    const { data, error } =
+      await supabase.auth.signInWithPassword({
+        email,
+        password: authPassword,
+      });
 
-          password:
-            authPassword,
-        }
-      );
-
-    setAuthLoading(
-      false
-    );
+    setAuthLoading(false);
 
     if (error) {
-      const text =
-        error.message.toLowerCase();
+      const text = error.message.toLowerCase();
 
-      if (
-        text.includes(
-          "email not confirmed"
-        )
-      ) {
-        setLastSignupEmail(
-          email
-        );
+      if (text.includes("email not confirmed")) {
+        setLastSignupEmail(email);
 
-        setAuthError(
-          "Seu e-mail ainda não foi confirmado."
-        );
+        setAuthError("Seu e-mail ainda não foi confirmado.");
 
         return;
       }
 
-      if (
-        text.includes(
-          "invalid login credentials"
-        )
-      ) {
-        setAuthError(
-          "E-mail ou senha incorretos."
-        );
-
+      if (text.includes("invalid login credentials")) {
+        setAuthError("E-mail ou senha incorretos.");
         return;
       }
 
-      setAuthError(
-        error.message
-      );
-
+      setAuthError(error.message);
       return;
     }
 
     if (data.user) {
-      setAuthUser(
-        data.user
-      );
-
-      await loadProfile(
-        data.user
-      );
+      setAuthUser(data.user);
+      await loadProfile(data.user);
     }
 
-    setAuthPassword(
-      ""
-    );
+    setAuthPassword("");
   }
 
-  /* =========================================
-     REENVIAR CONFIRMAÇÃO
-  ========================================= */
-
   async function resendConfirmation() {
-    if (
-      !lastSignupEmail
-    ) {
-      setAuthError(
-        "Digite o e-mail da conta."
-      );
-
+    if (!lastSignupEmail) {
+      setAuthError("Digite o e-mail da conta.");
       return;
     }
 
-    setResendLoading(
-      true
-    );
+    setResendLoading(true);
 
     clearAuthMessages();
 
-    const redirectUrl =
-      pendingInviteCode
-        ? `${
-            window
-              .location
-              .origin
-          }/?invite=${encodeURIComponent(
-            pendingInviteCode
-          )}`
-        : window
-            .location
-            .origin;
+    const redirectUrl = pendingInviteCode
+      ? `${window.location.origin}/?invite=${encodeURIComponent(
+          pendingInviteCode
+        )}`
+      : window.location.origin;
 
-    const {
-      error,
-    } =
-      await supabase.auth.resend(
-        {
-          type:
-            "signup",
+    const { error } = await supabase.auth.resend({
+      type: "signup",
 
-          email:
-            lastSignupEmail,
+      email: lastSignupEmail,
 
-          options: {
-            emailRedirectTo:
-              redirectUrl,
-          },
-        }
-      );
+      options: {
+        emailRedirectTo: redirectUrl,
+      },
+    });
 
-    setResendLoading(
-      false
-    );
+    setResendLoading(false);
 
     if (error) {
-      setAuthError(
-        error.message
-      );
-
+      setAuthError(error.message);
       return;
     }
 
-    setAuthSuccess(
-      "E-mail de confirmação reenviado."
-    );
+    setAuthSuccess("E-mail de confirmação reenviado.");
   }
 
-  /* =========================================
-     ESQUECI A SENHA
-  ========================================= */
+  /* =======================================================
+     RECUPERAÇÃO DE SENHA
+  ======================================================= */
 
   function openForgotPassword() {
-    setRecoveryEmail(
-      authEmail.trim()
-    );
+    setRecoveryEmail(authEmail.trim());
 
-    setRecoveryError(
-      ""
-    );
+    setRecoveryError("");
+    setRecoverySuccess("");
 
-    setRecoverySuccess(
-      ""
-    );
-
-    setShowForgotPassword(
-      true
-    );
+    setShowForgotPassword(true);
   }
 
   function closeForgotPassword() {
-    setShowForgotPassword(
-      false
-    );
+    setShowForgotPassword(false);
 
-    setRecoveryError(
-      ""
-    );
-
-    setRecoverySuccess(
-      ""
-    );
+    setRecoveryError("");
+    setRecoverySuccess("");
   }
 
-  async function handleForgotPassword(
-    event: FormEvent
-  ) {
+  async function handleForgotPassword(event: FormEvent) {
     event.preventDefault();
 
-    const email =
-      recoveryEmail
-        .trim()
-        .toLowerCase();
+    const email = recoveryEmail.trim().toLowerCase();
 
-    setRecoveryError(
-      ""
-    );
+    setRecoveryError("");
+    setRecoverySuccess("");
 
-    setRecoverySuccess(
-      ""
-    );
-
-    if (
-      !email ||
-      !email.includes(
-        "@"
-      )
-    ) {
-      setRecoveryError(
-        "Digite um e-mail válido."
-      );
-
+    if (!email || !email.includes("@")) {
+      setRecoveryError("Digite um e-mail válido.");
       return;
     }
 
-    setRecoveryLoading(
-      true
-    );
+    setRecoveryLoading(true);
 
-    const {
-      error,
-    } =
-      await supabase.auth.resetPasswordForEmail(
-        email,
-        {
-          redirectTo:
-            window
-              .location
-              .origin,
-        }
-      );
+    const { error } =
+      await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin,
+      });
 
-    setRecoveryLoading(
-      false
-    );
+    setRecoveryLoading(false);
 
     if (error) {
-      setRecoveryError(
-        error.message
-      );
-
+      setRecoveryError(error.message);
       return;
     }
 
@@ -1355,19 +770,12 @@ function App() {
     );
   }
 
-  async function handleNewPassword(
-    event: FormEvent
-  ) {
+  async function handleNewPassword(event: FormEvent) {
     event.preventDefault();
 
-    setNewPasswordError(
-      ""
-    );
+    setNewPasswordError("");
 
-    if (
-      newPassword.length <
-      6
-    ) {
+    if (newPassword.length < 6) {
       setNewPasswordError(
         "A nova senha precisa ter pelo menos 6 caracteres."
       );
@@ -1375,76 +783,37 @@ function App() {
       return;
     }
 
-    if (
-      newPassword !==
-      confirmNewPassword
-    ) {
-      setNewPasswordError(
-        "As senhas não são iguais."
-      );
-
+    if (newPassword !== confirmNewPassword) {
+      setNewPasswordError("As senhas não são iguais.");
       return;
     }
 
-    setNewPasswordLoading(
-      true
-    );
+    setNewPasswordLoading(true);
 
-    const {
-      error,
-    } =
-      await supabase.auth.updateUser(
-        {
-          password:
-            newPassword,
-        }
-      );
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
 
     if (error) {
-      setNewPasswordLoading(
-        false
-      );
-
-      setNewPasswordError(
-        error.message
-      );
-
+      setNewPasswordLoading(false);
+      setNewPasswordError(error.message);
       return;
     }
 
     await supabase.auth.signOut();
 
-    setNewPasswordLoading(
-      false
-    );
+    setNewPasswordLoading(false);
 
-    setPasswordRecoveryMode(
-      false
-    );
+    setPasswordRecoveryMode(false);
 
-    setCurrentUser(
-      null
-    );
+    setCurrentUser(null);
+    setAuthUser(null);
 
-    setAuthUser(
-      null
-    );
+    setNewPassword("");
+    setConfirmNewPassword("");
 
-    setNewPassword(
-      ""
-    );
-
-    setConfirmNewPassword(
-      ""
-    );
-
-    setAuthMode(
-      "login"
-    );
-
-    setAuthPassword(
-      ""
-    );
+    setAuthMode("login");
+    setAuthPassword("");
 
     setAuthSuccess(
       "Senha alterada com sucesso. Agora entre usando sua nova senha."
@@ -1460,234 +829,120 @@ function App() {
   async function logout() {
     await supabase.auth.signOut();
 
-    setAuthUser(
-      null
-    );
+    setAuthUser(null);
+    setCurrentUser(null);
 
-    setCurrentUser(
-      null
-    );
+    setServers([]);
+    setChannels([]);
+    setMessages([]);
+    setMembers([]);
 
-    setServers(
-      []
-    );
+    setFriends([]);
+    setIncomingRequests([]);
+    setOutgoingRequests([]);
 
-    setChannels(
-      []
-    );
+    setDirectMessages([]);
 
-    setMessages(
-      []
-    );
+    setActiveDmUser(null);
 
-    setMembers(
-      []
-    );
+    setCurrentServerId(null);
+    setCurrentChannelId(null);
 
-    setCurrentServerId(
-      null
-    );
-
-    setCurrentChannelId(
-      null
-    );
+    setMainMode("server");
   }
 
-  /* =========================================
+  /* =======================================================
      SERVIDORES
-  ========================================= */
+  ======================================================= */
 
   async function loadServers() {
-    if (!currentUser) {
-      return;
-    }
+    if (!currentUser) return;
 
-    setAppLoading(
-      true
-    );
+    setAppLoading(true);
 
-    const {
-      data,
-      error,
-    } =
-      await supabase
-        .from(
-          "servers"
-        )
-        .select(
-          "id,owner_id,name,icon_url,created_at"
-        )
-        .order(
-          "created_at",
-          {
-            ascending:
-              true,
-          }
-        );
+    const { data, error } = await supabase
+      .from("servers")
+      .select("id,owner_id,name,icon_url,created_at")
+      .order("created_at", {
+        ascending: true,
+      });
 
     if (error) {
-      console.error(
-        "Erro ao carregar servidores:",
-        error
-      );
+      console.error("Erro ao carregar servidores:", error);
 
-      setAppLoading(
-        false
-      );
-
+      setAppLoading(false);
       return;
     }
 
-    const list =
-      (data ||
-        []) as Server[];
+    const list = (data || []) as Server[];
 
-    if (
-      list.length === 0
-    ) {
-      const serverId =
-        crypto.randomUUID();
+    if (list.length === 0) {
+      const serverId = crypto.randomUUID();
 
-      const {
-        error:
-          createServerError,
-      } =
-        await supabase
-          .from(
-            "servers"
-          )
-          .insert({
-            id:
-              serverId,
+      const { error: createServerError } = await supabase
+        .from("servers")
+        .insert({
+          id: serverId,
+          owner_id: currentUser.id,
+          name: "CONEXÃO",
+        });
 
-            owner_id:
-              currentUser.id,
+      if (createServerError) {
+        console.error(createServerError);
 
-            name:
-              "CONEXÃO",
-          });
-
-      if (
-        createServerError
-      ) {
-        console.error(
-          createServerError
-        );
-
-        setAppLoading(
-          false
-        );
-
+        setAppLoading(false);
         return;
       }
 
-      const {
-        error:
-          createChannelError,
-      } =
-        await supabase
-          .from(
-            "channels"
-          )
-          .insert({
-            id:
-              crypto.randomUUID(),
+      const { error: createChannelError } = await supabase
+        .from("channels")
+        .insert({
+          id: crypto.randomUUID(),
+          server_id: serverId,
+          name: "geral",
+          description: "Converse com a comunidade",
+        });
 
-            server_id:
-              serverId,
-
-            name:
-              "geral",
-
-            description:
-              "Converse com a comunidade",
-          });
-
-      if (
-        createChannelError
-      ) {
-        console.error(
-          createChannelError
-        );
+      if (createChannelError) {
+        console.error(createChannelError);
       }
 
-      const {
-        data:
-          newServerData,
-      } =
-        await supabase
-          .from(
-            "servers"
-          )
-          .select(
-            "id,owner_id,name,icon_url,created_at"
-          )
-          .eq(
-            "id",
-            serverId
-          )
-          .single();
+      const { data: newServerData } = await supabase
+        .from("servers")
+        .select("id,owner_id,name,icon_url,created_at")
+        .eq("id", serverId)
+        .single();
 
-      if (
-        newServerData
-      ) {
-        setServers([
-          newServerData as Server,
-        ]);
-
-        setCurrentServerId(
-          serverId
-        );
+      if (newServerData) {
+        setServers([newServerData as Server]);
+        setCurrentServerId(serverId);
       }
 
-      setAppLoading(
-        false
-      );
-
+      setAppLoading(false);
       return;
     }
 
-    setServers(
-      list
-    );
+    setServers(list);
 
-    setCurrentServerId(
-      (
-        previous
-      ) => {
-        if (
-          previous &&
-          list.some(
-            (
-              server
-            ) =>
-              server.id ===
-              previous
-          )
-        ) {
-          return previous;
-        }
-
-        return (
-          list[0]
-            ?.id ||
-          null
-        );
+    setCurrentServerId((previous) => {
+      if (
+        previous &&
+        list.some((server) => server.id === previous)
+      ) {
+        return previous;
       }
-    );
 
-    setAppLoading(
-      false
-    );
+      return list[0]?.id || null;
+    });
+
+    setAppLoading(false);
   }
 
-  /* =========================================
-     ENTRAR POR CONVITE
-  ========================================= */
+  /* =======================================================
+     CONVITE
+  ======================================================= */
 
-  async function processPendingInvite(
-    code: string
-  ) {
+  async function processPendingInvite(code: string) {
     if (
       !currentUser ||
       !code ||
@@ -1696,54 +951,32 @@ function App() {
       return;
     }
 
-    inviteProcessingRef.current =
-      true;
+    inviteProcessingRef.current = true;
 
-    setJoinInviteLoading(
-      true
+    setJoinInviteLoading(true);
+
+    setJoinInviteError("");
+    setJoinInviteSuccess("");
+
+    const { data, error } = await supabase.rpc(
+      "join_server_by_invite",
+      {
+        p_code: code,
+      }
     );
 
-    setJoinInviteError(
-      ""
-    );
+    localStorage.removeItem("conexao_pending_invite");
 
-    setJoinInviteSuccess(
-      ""
-    );
-
-    const {
-      data,
-      error,
-    } =
-      await supabase.rpc(
-        "join_server_by_invite",
-        {
-          p_code:
-            code,
-        }
-      );
-
-    localStorage.removeItem(
-      "conexao_pending_invite"
-    );
-
-    setPendingInviteCode(
-      ""
-    );
+    setPendingInviteCode("");
 
     removeInviteFromUrl();
 
     if (error) {
-      setJoinInviteError(
-        error.message
-      );
+      setJoinInviteError(error.message);
 
-      setJoinInviteLoading(
-        false
-      );
+      setJoinInviteLoading(false);
 
-      inviteProcessingRef.current =
-        false;
+      inviteProcessingRef.current = false;
 
       await loadServers();
 
@@ -1752,278 +985,556 @@ function App() {
 
     await loadServers();
 
-    if (
-      typeof data ===
-        "string"
-    ) {
-      setCurrentServerId(
-        data
-      );
+    if (typeof data === "string") {
+      setCurrentServerId(data);
 
-      setCurrentChannelId(
-        null
-      );
+      setCurrentChannelId(null);
 
-      setChannels(
-        []
-      );
+      setChannels([]);
+      setMessages([]);
 
-      setMessages(
-        []
-      );
+      setMainMode("server");
     }
 
     setJoinInviteSuccess(
       "Convite aceito. Você entrou no servidor!"
     );
 
-    setJoinInviteLoading(
-      false
-    );
+    setJoinInviteLoading(false);
 
-    inviteProcessingRef.current =
-      false;
+    inviteProcessingRef.current = false;
   }
 
   useEffect(() => {
-    if (!currentUser) {
-      return;
-    }
+    if (!currentUser) return;
 
-    if (
-      pendingInviteCode
-    ) {
-      void processPendingInvite(
-        pendingInviteCode
-      );
-
+    if (pendingInviteCode) {
+      void processPendingInvite(pendingInviteCode);
       return;
     }
 
     void loadServers();
+    void loadFriendships();
+  }, [currentUser?.id, pendingInviteCode]);
+
+  /* =======================================================
+     SISTEMA DE AMIGOS
+  ======================================================= */
+
+  async function loadFriendships() {
+    if (!currentUser) return;
+
+    setFriendsLoading(true);
+
+    const { data, error } = await supabase
+      .from("friendships")
+      .select(
+        "id,requester_id,addressee_id,status,created_at"
+      )
+      .or(
+        `requester_id.eq.${currentUser.id},addressee_id.eq.${currentUser.id}`
+      )
+      .order("created_at", {
+        ascending: false,
+      });
+
+    if (error) {
+      console.error("Erro ao carregar amizades:", error);
+
+      setFriendsLoading(false);
+      return;
+    }
+
+    const rows = (data || []) as FriendshipRow[];
+
+    const profileIds = Array.from(
+      new Set(
+        rows.map((row) =>
+          row.requester_id === currentUser.id
+            ? row.addressee_id
+            : row.requester_id
+        )
+      )
+    );
+
+    if (profileIds.length === 0) {
+      setFriends([]);
+      setIncomingRequests([]);
+      setOutgoingRequests([]);
+
+      setFriendsLoading(false);
+
+      return;
+    }
+
+    const { data: profilesData, error: profilesError } =
+      await supabase
+        .from("profiles")
+        .select("id,name,email,avatar_url,status")
+        .in("id", profileIds);
+
+    if (profilesError) {
+      console.error(profilesError);
+
+      setFriendsLoading(false);
+
+      return;
+    }
+
+    const profiles = (profilesData || []) as Profile[];
+
+    const profileMap = new Map<string, Profile>();
+
+    profiles.forEach((profile) => {
+      profileMap.set(profile.id, profile);
+    });
+
+    const accepted: FriendItem[] = [];
+    const incoming: FriendItem[] = [];
+    const outgoing: FriendItem[] = [];
+
+    rows.forEach((row) => {
+      const otherUserId =
+        row.requester_id === currentUser.id
+          ? row.addressee_id
+          : row.requester_id;
+
+      const profile = profileMap.get(otherUserId);
+
+      if (!profile) return;
+
+      const item: FriendItem = {
+        friendship_id: row.id,
+        user: profile,
+        created_at: row.created_at,
+      };
+
+      if (row.status === "accepted") {
+        accepted.push(item);
+        return;
+      }
+
+      if (
+        row.status === "pending" &&
+        row.addressee_id === currentUser.id
+      ) {
+        incoming.push(item);
+        return;
+      }
+
+      if (
+        row.status === "pending" &&
+        row.requester_id === currentUser.id
+      ) {
+        outgoing.push(item);
+      }
+    });
+
+    setFriends(accepted);
+    setIncomingRequests(incoming);
+    setOutgoingRequests(outgoing);
+
+    setFriendsLoading(false);
+  }
+
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const friendshipRealtime = supabase
+      .channel(`friendships-${currentUser.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "friendships",
+        },
+        () => {
+          void loadFriendships();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(friendshipRealtime);
+    };
+  }, [currentUser?.id]);
+
+  async function sendFriendRequest() {
+    if (!currentUser) return;
+
+    const email = friendEmail.trim().toLowerCase();
+
+    setFriendError("");
+    setFriendSuccess("");
+
+    if (!email || !email.includes("@")) {
+      setFriendError("Digite um e-mail válido.");
+      return;
+    }
+
+    setFriendActionLoading(true);
+
+    const { error } = await supabase.rpc(
+      "send_friend_request",
+      {
+        p_email: email,
+      }
+    );
+
+    setFriendActionLoading(false);
+
+    if (error) {
+      setFriendError(error.message);
+      return;
+    }
+
+    setFriendEmail("");
+
+    setFriendSuccess("Solicitação de amizade enviada!");
+
+    await loadFriendships();
+  }
+
+  async function acceptFriendRequest(friendshipId: string) {
+    setFriendActionLoading(true);
+
+    const { error } = await supabase.rpc(
+      "accept_friend_request",
+      {
+        p_friendship_id: friendshipId,
+      }
+    );
+
+    setFriendActionLoading(false);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    await loadFriendships();
+  }
+
+  async function rejectFriendRequest(friendshipId: string) {
+    setFriendActionLoading(true);
+
+    const { error } = await supabase.rpc(
+      "reject_friend_request",
+      {
+        p_friendship_id: friendshipId,
+      }
+    );
+
+    setFriendActionLoading(false);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    await loadFriendships();
+  }
+
+  async function removeFriendship(
+    friendshipId: string,
+    friendName: string
+  ) {
+    const confirmed = window.confirm(
+      `Remover ${friendName} dos seus amigos?`
+    );
+
+    if (!confirmed) return;
+
+    const { error } = await supabase.rpc(
+      "remove_friendship",
+      {
+        p_friendship_id: friendshipId,
+      }
+    );
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    if (
+      activeDmUser &&
+      friends.some(
+        (friend) =>
+          friend.friendship_id === friendshipId &&
+          friend.user.id === activeDmUser.id
+      )
+    ) {
+      setActiveDmUser(null);
+      setMainMode("friends");
+      setDirectMessages([]);
+    }
+
+    await loadFriendships();
+  }
+
+  function openFriends() {
+    setMainMode("friends");
+
+    setActiveDmUser(null);
+
+    setFriendError("");
+    setFriendSuccess("");
+
+    void loadFriendships();
+  }
+
+  /* =======================================================
+     MENSAGENS PRIVADAS
+  ======================================================= */
+
+  async function fetchDirectMessages(friendId: string) {
+    if (!currentUser) return;
+
+    setDmLoading(true);
+
+    const { data, error } = await supabase
+      .from("direct_messages")
+      .select(
+        "id,sender_id,receiver_id,content,created_at"
+      )
+      .or(
+        `and(sender_id.eq.${currentUser.id},receiver_id.eq.${friendId}),and(sender_id.eq.${friendId},receiver_id.eq.${currentUser.id})`
+      )
+      .order("created_at", {
+        ascending: true,
+      });
+
+    setDmLoading(false);
+
+    if (error) {
+      console.error("Erro ao carregar DM:", error);
+      return;
+    }
+
+    setDirectMessages((data || []) as DirectMessage[]);
+  }
+
+  function openDm(friend: Profile) {
+    setActiveDmUser(friend);
+
+    setMainMode("dm");
+
+    setDmText("");
+
+    void fetchDirectMessages(friend.id);
+  }
+
+  useEffect(() => {
+    if (
+      !currentUser ||
+      !activeDmUser ||
+      mainMode !== "dm"
+    ) {
+      return;
+    }
+
+    void fetchDirectMessages(activeDmUser.id);
+
+    const realtime = supabase
+      .channel(
+        `dm-${currentUser.id}-${activeDmUser.id}`
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "direct_messages",
+        },
+        (payload) => {
+          const newMessage = payload.new as DirectMessage;
+
+          const isOurConversation =
+            (newMessage.sender_id === currentUser.id &&
+              newMessage.receiver_id === activeDmUser.id) ||
+            (newMessage.sender_id === activeDmUser.id &&
+              newMessage.receiver_id === currentUser.id);
+
+          if (isOurConversation) {
+            void fetchDirectMessages(activeDmUser.id);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(realtime);
+    };
   }, [
     currentUser?.id,
-    pendingInviteCode,
+    activeDmUser?.id,
+    mainMode,
   ]);
 
+  async function sendDirectMessage() {
+    if (!currentUser || !activeDmUser) return;
+
+    const text = dmText.trim();
+
+    if (!text) return;
+
+    const { error } = await supabase
+      .from("direct_messages")
+      .insert({
+        id: crypto.randomUUID(),
+
+        sender_id: currentUser.id,
+        receiver_id: activeDmUser.id,
+
+        content: text,
+      });
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setDmText("");
+
+    await fetchDirectMessages(activeDmUser.id);
+  }
+
+  function handleDmKeyDown(
+    event: KeyboardEvent<HTMLInputElement>
+  ) {
+    if (event.key === "Enter") {
+      void sendDirectMessage();
+    }
+  }
+
+  /* =======================================================
+     CRIAR / TROCAR SERVIDOR
+  ======================================================= */
+
   function openCreateServer() {
-    setNewServerName(
-      ""
-    );
-
-    setServerError(
-      ""
-    );
-
-    setShowCreateServer(
-      true
-    );
+    setNewServerName("");
+    setServerError("");
+    setShowCreateServer(true);
   }
 
   function closeCreateServer() {
-    setShowCreateServer(
-      false
-    );
-
-    setNewServerName(
-      ""
-    );
-
-    setServerError(
-      ""
-    );
+    setShowCreateServer(false);
+    setNewServerName("");
+    setServerError("");
   }
 
   async function createServer() {
-    if (!currentUser) {
-      return;
-    }
+    if (!currentUser) return;
 
-    const name =
-      newServerName.trim();
+    const name = newServerName.trim();
 
     if (!name) {
-      setServerError(
-        "Digite o nome do servidor."
-      );
-
+      setServerError("Digite o nome do servidor.");
       return;
     }
 
-    const serverId =
-      crypto.randomUUID();
+    const serverId = crypto.randomUUID();
 
-    const {
-      error,
-    } =
-      await supabase
-        .from(
-          "servers"
-        )
-        .insert({
-          id:
-            serverId,
-
-          owner_id:
-            currentUser.id,
-
-          name,
-        });
+    const { error } = await supabase
+      .from("servers")
+      .insert({
+        id: serverId,
+        owner_id: currentUser.id,
+        name,
+      });
 
     if (error) {
-      setServerError(
-        error.message
-      );
-
+      setServerError(error.message);
       return;
     }
 
-    const {
-      error:
-        channelCreateError,
-    } =
-      await supabase
-        .from(
-          "channels"
-        )
-        .insert({
-          id:
-            crypto.randomUUID(),
+    const { error: channelCreateError } = await supabase
+      .from("channels")
+      .insert({
+        id: crypto.randomUUID(),
 
-          server_id:
-            serverId,
+        server_id: serverId,
 
-          name:
-            "geral",
+        name: "geral",
 
-          description:
-            "Converse com a comunidade",
-        });
+        description: "Converse com a comunidade",
+      });
 
-    if (
-      channelCreateError
-    ) {
-      console.error(
-        channelCreateError
-      );
+    if (channelCreateError) {
+      console.error(channelCreateError);
     }
 
     await loadServers();
 
-    setCurrentServerId(
-      serverId
-    );
+    setCurrentServerId(serverId);
+
+    setMainMode("server");
 
     closeCreateServer();
   }
 
-  function changeServer(
-    serverId: string
-  ) {
-    setCurrentServerId(
-      serverId
-    );
+  function changeServer(serverId: string) {
+    setCurrentServerId(serverId);
 
-    setCurrentChannelId(
-      null
-    );
+    setCurrentChannelId(null);
 
-    setChannels(
-      []
-    );
+    setChannels([]);
+    setMessages([]);
 
-    setMessages(
-      []
-    );
+    setMainMode("server");
+
+    setActiveDmUser(null);
   }
 
+  /* =======================================================
+     EDITAR SERVIDOR
+  ======================================================= */
+
   function openEditServer() {
-    if (!currentServer) {
-      return;
-    }
+    if (!currentServer) return;
 
-    setEditingServerName(
-      currentServer.name
-    );
+    setEditingServerName(currentServer.name);
 
-    setEditServerError(
-      ""
-    );
+    setEditServerError("");
 
-    setInviteEmail(
-      ""
-    );
+    setInviteEmail("");
 
-    setInviteMemberError(
-      ""
-    );
+    setInviteMemberError("");
+    setInviteMemberSuccess("");
 
-    setInviteMemberSuccess(
-      ""
-    );
-
-    setShowEditServer(
-      true
-    );
+    setShowEditServer(true);
   }
 
   function closeEditServer() {
-    setShowEditServer(
-      false
-    );
+    setShowEditServer(false);
 
-    setEditServerError(
-      ""
-    );
+    setEditServerError("");
 
-    setInviteMemberError(
-      ""
-    );
-
-    setInviteMemberSuccess(
-      ""
-    );
+    setInviteMemberError("");
+    setInviteMemberSuccess("");
   }
 
   async function saveEditedServer() {
-    if (
-      !currentServer ||
-      !isServerOwner
-    ) {
-      return;
-    }
+    if (!currentServer || !isServerOwner) return;
 
-    const name =
-      editingServerName.trim();
+    const name = editingServerName.trim();
 
     if (!name) {
-      setEditServerError(
-        "Digite um nome."
-      );
-
+      setEditServerError("Digite um nome.");
       return;
     }
 
-    const {
-      error,
-    } =
-      await supabase
-        .from(
-          "servers"
-        )
-        .update({
-          name,
-        })
-        .eq(
-          "id",
-          currentServer.id
-        );
+    const { error } = await supabase
+      .from("servers")
+      .update({
+        name,
+      })
+      .eq("id", currentServer.id);
 
     if (error) {
-      setEditServerError(
-        error.message
-      );
-
+      setEditServerError(error.message);
       return;
     }
 
@@ -2033,537 +1544,252 @@ function App() {
   }
 
   async function deleteServer() {
-    if (
-      !currentServer ||
-      !isServerOwner
-    ) {
-      return;
-    }
+    if (!currentServer || !isServerOwner) return;
 
-    const confirmed =
-      window.confirm(
-        `Excluir "${currentServer.name}"?`
-      );
+    const confirmed = window.confirm(
+      `Excluir "${currentServer.name}"?`
+    );
 
-    if (!confirmed) {
-      return;
-    }
+    if (!confirmed) return;
 
-    const {
-      error,
-    } =
-      await supabase
-        .from(
-          "servers"
-        )
-        .delete()
-        .eq(
-          "id",
-          currentServer.id
-        );
+    const { error } = await supabase
+      .from("servers")
+      .delete()
+      .eq("id", currentServer.id);
 
     if (error) {
-      alert(
-        error.message
-      );
-
+      alert(error.message);
       return;
     }
 
     closeEditServer();
 
-    setCurrentServerId(
-      null
-    );
-
-    setCurrentChannelId(
-      null
-    );
+    setCurrentServerId(null);
+    setCurrentChannelId(null);
 
     await loadServers();
   }
 
-  /* =========================================
-     CRIAR LINK DE CONVITE
-  ========================================= */
+  /* =======================================================
+     CONVITES
+  ======================================================= */
 
   function openInviteModal() {
-    setInviteLink(
-      ""
-    );
+    setInviteLink("");
 
-    setInviteError(
-      ""
-    );
+    setInviteError("");
 
-    setInviteCopied(
-      false
-    );
+    setInviteCopied(false);
 
-    setShowInviteModal(
-      true
-    );
+    setShowInviteModal(true);
   }
 
   function closeInviteModal() {
-    setShowInviteModal(
-      false
-    );
+    setShowInviteModal(false);
 
-    setInviteLink(
-      ""
-    );
+    setInviteLink("");
 
-    setInviteError(
-      ""
-    );
+    setInviteError("");
 
-    setInviteCopied(
-      false
-    );
+    setInviteCopied(false);
   }
 
   async function createInviteLink() {
-    if (
-      !currentServer ||
-      !isServerOwner
-    ) {
-      return;
-    }
+    if (!currentServer || !isServerOwner) return;
 
-    setInviteLoading(
-      true
+    setInviteLoading(true);
+
+    setInviteError("");
+
+    setInviteCopied(false);
+
+    const { data, error } = await supabase.rpc(
+      "create_server_invite",
+      {
+        p_server_id: currentServer.id,
+        p_expires_hours: 24,
+      }
     );
 
-    setInviteError(
-      ""
-    );
-
-    setInviteCopied(
-      false
-    );
-
-    const {
-      data,
-      error,
-    } =
-      await supabase.rpc(
-        "create_server_invite",
-        {
-          p_server_id:
-            currentServer.id,
-
-          p_expires_hours:
-            24,
-        }
-      );
-
-    setInviteLoading(
-      false
-    );
+    setInviteLoading(false);
 
     if (error) {
-      setInviteError(
-        error.message
-      );
-
+      setInviteError(error.message);
       return;
     }
 
-    if (
-      typeof data !==
-        "string" ||
-      !data
-    ) {
-      setInviteError(
-        "Não foi possível criar o convite."
-      );
-
+    if (typeof data !== "string" || !data) {
+      setInviteError("Não foi possível criar o convite.");
       return;
     }
 
     const baseUrl =
-      window.location
-        .hostname ===
-        "localhost" ||
-      window.location
-        .hostname ===
-        "127.0.0.1"
+      window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1"
         ? "https://conexao-jagr.vercel.app"
-        : window
-            .location
-            .origin;
+        : window.location.origin;
 
-    const url =
-      new URL(
-        baseUrl
-      );
+    const url = new URL(baseUrl);
 
-    url.searchParams.set(
-      "invite",
-      data
-    );
+    url.searchParams.set("invite", data);
 
-    setInviteLink(
-      url.toString()
-    );
+    setInviteLink(url.toString());
   }
 
   async function copyInviteLink() {
-    if (!inviteLink) {
-      return;
-    }
+    if (!inviteLink) return;
 
     try {
-      if (
-        navigator.clipboard &&
-        window.isSecureContext
-      ) {
-        await navigator.clipboard.writeText(
-          inviteLink
-        );
-      } else {
-        const textarea =
-          document.createElement(
-            "textarea"
-          );
+      await navigator.clipboard.writeText(inviteLink);
 
-        textarea.value =
-          inviteLink;
-
-        textarea.style.position =
-          "fixed";
-
-        textarea.style.opacity =
-          "0";
-
-        document.body.appendChild(
-          textarea
-        );
-
-        textarea.focus();
-        textarea.select();
-
-        document.execCommand(
-          "copy"
-        );
-
-        textarea.remove();
-      }
-
-      setInviteCopied(
-        true
-      );
+      setInviteCopied(true);
     } catch {
-      setInviteError(
-        "Não foi possível copiar o link."
-      );
+      setInviteError("Não foi possível copiar o link.");
     }
   }
 
-  /* =========================================
-     IMAGEM SERVIDOR
-  ========================================= */
+  /* =======================================================
+     IMAGEM DO SERVIDOR
+  ======================================================= */
 
   function selectServerImage() {
-    serverFileInputRef
-      .current
-      ?.click();
+    serverFileInputRef.current?.click();
   }
 
   async function handleServerImage(
-    event:
-      ChangeEvent<HTMLInputElement>
+    event: ChangeEvent<HTMLInputElement>
   ) {
-    if (
-      !currentServer ||
-      !isServerOwner
-    ) {
+    if (!currentServer || !isServerOwner) return;
+
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      alert("Escolha uma imagem.");
       return;
     }
 
-    const file =
-      event.target
-        .files?.[0];
-
-    if (!file) {
-      return;
-    }
-
-    if (
-      !file.type.startsWith(
-        "image/"
-      )
-    ) {
-      alert(
-        "Escolha uma imagem."
-      );
-
-      return;
-    }
-
-    if (
-      file.size >
-      10 *
-        1024 *
-        1024
-    ) {
-      alert(
-        "A imagem deve ter menos de 10 MB."
-      );
-
+    if (file.size > 10 * 1024 * 1024) {
+      alert("A imagem deve ter menos de 10 MB.");
       return;
     }
 
     try {
-      const icon =
-        await compressImage(
-          file,
-          256,
-          0.75
-        );
+      const icon = await compressImage(file, 256, 0.75);
 
-      const {
-        error,
-      } =
-        await supabase
-          .from(
-            "servers"
-          )
-          .update({
-            icon_url:
-              icon,
-          })
-          .eq(
-            "id",
-            currentServer.id
-          );
+      const { error } = await supabase
+        .from("servers")
+        .update({
+          icon_url: icon,
+        })
+        .eq("id", currentServer.id);
 
       if (error) {
-        alert(
-          error.message
-        );
-
+        alert(error.message);
         return;
       }
 
       await loadServers();
     } catch {
-      alert(
-        "Não foi possível processar a imagem."
-      );
+      alert("Não foi possível processar a imagem.");
     }
 
-    event.target.value =
-      "";
+    event.target.value = "";
   }
 
   async function removeServerImage() {
-    if (
-      !currentServer ||
-      !isServerOwner
-    ) {
-      return;
-    }
+    if (!currentServer || !isServerOwner) return;
 
     await supabase
-      .from(
-        "servers"
-      )
+      .from("servers")
       .update({
-        icon_url:
-          null,
+        icon_url: null,
       })
-      .eq(
-        "id",
-        currentServer.id
-      );
+      .eq("id", currentServer.id);
 
     await loadServers();
   }
 
-  /* =========================================
+  /* =======================================================
      MEMBROS
-  ========================================= */
+  ======================================================= */
 
-  async function loadMembers(
-    serverId: string
-  ) {
-    const {
-      data,
-      error,
-    } =
-      await supabase
-        .from(
-          "server_members"
-        )
-        .select(
-          "user_id,role"
-        )
-        .eq(
-          "server_id",
-          serverId
-        );
+  async function loadMembers(serverId: string) {
+    const { data, error } = await supabase
+      .from("server_members")
+      .select("user_id,role")
+      .eq("server_id", serverId);
 
     if (error) {
-      console.error(
-        error
-      );
-
+      console.error(error);
       return;
     }
 
-    const rows =
-      data || [];
+    const rows = data || [];
 
-    const ids =
-      rows.map(
-        (
-          row
-        ) =>
-          row.user_id
-      );
+    const ids = rows.map((row) => row.user_id);
 
-    if (
-      ids.length ===
-      0
-    ) {
-      setMembers(
-        []
-      );
-
+    if (ids.length === 0) {
+      setMembers([]);
       return;
     }
 
-    const {
-      data:
-        profileData,
-      error:
-        profilesError,
-    } =
+    const { data: profileData, error: profilesError } =
       await supabase
-        .from(
-          "profiles"
-        )
-        .select(
-          "id,name,email,avatar_url,status"
-        )
-        .in(
-          "id",
-          ids
-        );
+        .from("profiles")
+        .select("id,name,email,avatar_url,status")
+        .in("id", ids);
 
-    if (
-      profilesError
-    ) {
-      console.error(
-        profilesError
-      );
-
+    if (profilesError) {
+      console.error(profilesError);
       return;
     }
 
-    const profiles =
-      (profileData ||
-        []) as Profile[];
+    const profiles = (profileData || []) as Profile[];
 
-    const result:
-      Member[] =
-      rows
-        .map(
-          (
-            row
-          ) => {
-            const profile =
-              profiles.find(
-                (
-                  item
-                ) =>
-                  item.id ===
-                  row.user_id
-              );
-
-            if (
-              !profile
-            ) {
-              return null;
-            }
-
-            return {
-              ...profile,
-
-              role:
-                row.role,
-            };
-          }
-        )
-        .filter(
-          (
-            item
-          ): item is Member =>
-            item !== null
+    const result: Member[] = rows
+      .map((row) => {
+        const profile = profiles.find(
+          (item) => item.id === row.user_id
         );
 
-    setMembers(
-      result
-    );
+        if (!profile) return null;
+
+        return {
+          ...profile,
+          role: row.role,
+        };
+      })
+      .filter(
+        (item): item is Member => item !== null
+      );
+
+    setMembers(result);
   }
 
   async function inviteMember() {
-    if (
-      !currentServer ||
-      !isServerOwner
-    ) {
-      return;
-    }
+    if (!currentServer || !isServerOwner) return;
 
-    const email =
-      inviteEmail
-        .trim()
-        .toLowerCase();
+    const email = inviteEmail.trim().toLowerCase();
 
-    setInviteMemberError(
-      ""
-    );
-
-    setInviteMemberSuccess(
-      ""
-    );
+    setInviteMemberError("");
+    setInviteMemberSuccess("");
 
     if (!email) {
-      setInviteMemberError(
-        "Digite o e-mail do usuário."
-      );
-
+      setInviteMemberError("Digite o e-mail do usuário.");
       return;
     }
 
-    const {
-      data:
-        profile,
-      error:
-        profileError,
-    } =
+    const { data: profile, error: profileError } =
       await supabase
-        .from(
-          "profiles"
-        )
-        .select(
-          "id,name,email"
-        )
-        .eq(
-          "email",
-          email
-        )
+        .from("profiles")
+        .select("id,name,email")
+        .eq("email", email)
         .maybeSingle();
 
-    if (
-      profileError
-    ) {
-      setInviteMemberError(
-        profileError.message
-      );
-
+    if (profileError) {
+      setInviteMemberError(profileError.message);
       return;
     }
 
@@ -2575,1083 +1801,596 @@ function App() {
       return;
     }
 
-    if (
-      profile.id ===
-      currentUser?.id
-    ) {
-      setInviteMemberError(
-        "Você já está no servidor."
-      );
-
+    if (profile.id === currentUser?.id) {
+      setInviteMemberError("Você já está no servidor.");
       return;
     }
 
-    const {
-      error,
-    } =
-      await supabase
-        .from(
-          "server_members"
-        )
-        .insert({
-          server_id:
-            currentServer.id,
-
-          user_id:
-            profile.id,
-
-          role:
-            "member",
-        });
+    const { error } = await supabase
+      .from("server_members")
+      .insert({
+        server_id: currentServer.id,
+        user_id: profile.id,
+        role: "member",
+      });
 
     if (error) {
-      if (
-        error.code ===
-        "23505"
-      ) {
+      if (error.code === "23505") {
         setInviteMemberError(
           "Esse usuário já está no servidor."
         );
       } else {
-        setInviteMemberError(
-          error.message
-        );
+        setInviteMemberError(error.message);
       }
 
       return;
     }
 
-    setInviteEmail(
-      ""
-    );
+    setInviteEmail("");
 
     setInviteMemberSuccess(
       `${profile.name} entrou no servidor.`
     );
 
-    await loadMembers(
-      currentServer.id
-    );
+    await loadMembers(currentServer.id);
   }
 
-  /* =========================================
+  /* =======================================================
      CANAIS
-  ========================================= */
+  ======================================================= */
 
-  async function loadChannels(
-    serverId: string
-  ) {
-    const {
-      data,
-      error,
-    } =
-      await supabase
-        .from(
-          "channels"
-        )
-        .select(
-          "id,server_id,name,description,created_at"
-        )
-        .eq(
-          "server_id",
-          serverId
-        )
-        .order(
-          "created_at",
-          {
-            ascending:
-              true,
-          }
-        );
+  async function loadChannels(serverId: string) {
+    const { data, error } = await supabase
+      .from("channels")
+      .select(
+        "id,server_id,name,description,created_at"
+      )
+      .eq("server_id", serverId)
+      .order("created_at", {
+        ascending: true,
+      });
 
     if (error) {
-      console.error(
-        "Erro canais:",
-        error
-      );
-
+      console.error("Erro canais:", error);
       return;
     }
 
-    const list =
-      (data ||
-        []) as Channel[];
+    const list = (data || []) as Channel[];
 
-    setChannels(
-      list
-    );
+    setChannels(list);
 
-    setCurrentChannelId(
-      (
-        previous
-      ) => {
-        if (
-          previous &&
-          list.some(
-            (
-              channel
-            ) =>
-              channel.id ===
-              previous
-          )
-        ) {
-          return previous;
-        }
-
-        return (
-          list[0]
-            ?.id ||
-          null
-        );
+    setCurrentChannelId((previous) => {
+      if (
+        previous &&
+        list.some((channel) => channel.id === previous)
+      ) {
+        return previous;
       }
-    );
+
+      return list[0]?.id || null;
+    });
   }
 
   useEffect(() => {
-    if (
-      !currentServerId
-    ) {
-      setChannels(
-        []
-      );
-
-      setMembers(
-        []
-      );
-
+    if (!currentServerId) {
+      setChannels([]);
+      setMembers([]);
       return;
     }
 
-    void loadChannels(
-      currentServerId
-    );
+    void loadChannels(currentServerId);
 
-    void loadMembers(
-      currentServerId
-    );
-  }, [
-    currentServerId,
-  ]);
+    void loadMembers(currentServerId);
+  }, [currentServerId]);
 
   function openCreateChannel() {
-    setNewChannelName(
-      ""
-    );
+    setNewChannelName("");
 
-    setChannelError(
-      ""
-    );
+    setChannelError("");
 
-    setShowCreateChannel(
-      true
-    );
+    setShowCreateChannel(true);
   }
 
   function closeCreateChannel() {
-    setShowCreateChannel(
-      false
-    );
+    setShowCreateChannel(false);
 
-    setChannelError(
-      ""
-    );
+    setChannelError("");
   }
 
   async function createChannel() {
-    if (
-      !currentServer ||
-      !isServerOwner
-    ) {
-      return;
-    }
+    if (!currentServer || !isServerOwner) return;
 
-    const name =
-      normalizeChannelName(
-        newChannelName
-      );
+    const name = normalizeChannelName(newChannelName);
 
     if (!name) {
-      setChannelError(
-        "Digite um nome válido."
-      );
-
+      setChannelError("Digite um nome válido.");
       return;
     }
 
-    const channelId =
-      crypto.randomUUID();
+    const channelId = crypto.randomUUID();
 
-    const {
-      error,
-    } =
-      await supabase
-        .from(
-          "channels"
-        )
-        .insert({
-          id:
-            channelId,
+    const { error } = await supabase
+      .from("channels")
+      .insert({
+        id: channelId,
 
-          server_id:
-            currentServer.id,
+        server_id: currentServer.id,
 
-          name,
+        name,
 
-          description:
-            `Canal #${name}`,
-        });
+        description: `Canal #${name}`,
+      });
 
     if (error) {
-      if (
-        error.code ===
-        "23505"
-      ) {
-        setChannelError(
-          "Esse canal já existe."
-        );
+      if (error.code === "23505") {
+        setChannelError("Esse canal já existe.");
       } else {
-        setChannelError(
-          error.message
-        );
+        setChannelError(error.message);
       }
 
       return;
     }
 
-    await loadChannels(
-      currentServer.id
-    );
+    await loadChannels(currentServer.id);
 
-    setCurrentChannelId(
-      channelId
-    );
+    setCurrentChannelId(channelId);
 
     closeCreateChannel();
   }
 
-  function changeChannel(
-    channelId: string
-  ) {
-    setCurrentChannelId(
-      channelId
-    );
+  function changeChannel(channelId: string) {
+    setCurrentChannelId(channelId);
 
-    setMessage(
-      ""
-    );
+    setMessage("");
+
+    setMainMode("server");
   }
 
-  function openEditChannel(
-    channel: Channel
-  ) {
-    setEditingChannelId(
-      channel.id
-    );
+  function openEditChannel(channel: Channel) {
+    setEditingChannelId(channel.id);
 
-    setEditingChannelName(
-      channel.name
-    );
+    setEditingChannelName(channel.name);
 
-    setEditChannelError(
-      ""
-    );
+    setEditChannelError("");
 
-    setShowEditChannel(
-      true
-    );
+    setShowEditChannel(true);
   }
 
   function closeEditChannel() {
-    setShowEditChannel(
-      false
-    );
+    setShowEditChannel(false);
 
-    setEditingChannelId(
-      ""
-    );
+    setEditingChannelId("");
 
-    setEditingChannelName(
-      ""
-    );
+    setEditingChannelName("");
 
-    setEditChannelError(
-      ""
-    );
+    setEditChannelError("");
   }
 
   async function saveEditedChannel() {
-    if (
-      !currentServer ||
-      !isServerOwner
-    ) {
-      return;
-    }
+    if (!currentServer || !isServerOwner) return;
 
-    const name =
-      normalizeChannelName(
-        editingChannelName
-      );
+    const name = normalizeChannelName(editingChannelName);
 
     if (!name) {
-      setEditChannelError(
-        "Digite um nome válido."
-      );
-
+      setEditChannelError("Digite um nome válido.");
       return;
     }
 
-    const {
-      error,
-    } =
-      await supabase
-        .from(
-          "channels"
-        )
-        .update({
-          name,
+    const { error } = await supabase
+      .from("channels")
+      .update({
+        name,
 
-          description:
-            `Canal #${name}`,
-        })
-        .eq(
-          "id",
-          editingChannelId
-        );
+        description: `Canal #${name}`,
+      })
+      .eq("id", editingChannelId);
 
     if (error) {
-      setEditChannelError(
-        error.message
-      );
-
+      setEditChannelError(error.message);
       return;
     }
 
-    await loadChannels(
-      currentServer.id
-    );
+    await loadChannels(currentServer.id);
 
     closeEditChannel();
   }
 
-  async function deleteChannel(
-    channelId: string
-  ) {
-    if (
-      !currentServer ||
-      !isServerOwner
-    ) {
+  async function deleteChannel(channelId: string) {
+    if (!currentServer || !isServerOwner) return;
+
+    if (channels.length === 1) {
+      alert("O servidor precisa ter pelo menos um canal.");
       return;
     }
 
-    if (
-      channels.length ===
-      1
-    ) {
-      alert(
-        "O servidor precisa ter pelo menos um canal."
-      );
+    const confirmed = window.confirm("Excluir este canal?");
 
-      return;
-    }
+    if (!confirmed) return;
 
-    const confirmed =
-      window.confirm(
-        "Excluir este canal?"
-      );
-
-    if (!confirmed) {
-      return;
-    }
-
-    const {
-      error,
-    } =
-      await supabase
-        .from(
-          "channels"
-        )
-        .delete()
-        .eq(
-          "id",
-          channelId
-        );
+    const { error } = await supabase
+      .from("channels")
+      .delete()
+      .eq("id", channelId);
 
     if (error) {
-      alert(
-        error.message
-      );
-
+      alert(error.message);
       return;
     }
 
-    if (
-      currentChannelId ===
-      channelId
-    ) {
-      setCurrentChannelId(
-        null
-      );
+    if (currentChannelId === channelId) {
+      setCurrentChannelId(null);
     }
 
-    await loadChannels(
-      currentServer.id
-    );
+    await loadChannels(currentServer.id);
   }
 
-  /* =========================================
-     MENSAGENS
-  ========================================= */
+  /* =======================================================
+     MENSAGENS DO SERVIDOR
+  ======================================================= */
 
-  async function fetchMessages(
-    channelId: string
-  ) {
-    const {
-      data,
-      error,
-    } =
-      await supabase
-        .from(
-          "messages"
-        )
-        .select(
-          "id,channel_id,user_id,content,created_at"
-        )
-        .eq(
-          "channel_id",
-          channelId
-        )
-        .order(
-          "created_at",
-          {
-            ascending:
-              true,
-          }
-        );
+  async function fetchMessages(channelId: string) {
+    const { data, error } = await supabase
+      .from("messages")
+      .select(
+        "id,channel_id,user_id,content,created_at"
+      )
+      .eq("channel_id", channelId)
+      .order("created_at", {
+        ascending: true,
+      });
 
     if (error) {
-      console.error(
-        "Erro mensagens:",
-        error
-      );
-
+      console.error("Erro mensagens:", error);
       return;
     }
 
-    const rows =
-      (data ||
-        []) as DatabaseMessage[];
+    const rows = (data || []) as DatabaseMessage[];
 
-    if (
-      rows.length ===
-      0
-    ) {
-      setMessages(
-        []
-      );
-
+    if (rows.length === 0) {
+      setMessages([]);
       return;
     }
 
-    const userIds =
-      Array.from(
-        new Set(
-          rows.map(
-            (
-              row
-            ) =>
-              row.user_id
-          )
-        )
-      );
-
-    const {
-      data:
-        profilesData,
-    } =
-      await supabase
-        .from(
-          "profiles"
-        )
-        .select(
-          "id,name,avatar_url"
-        )
-        .in(
-          "id",
-          userIds
-        );
-
-    const profileMap =
-      new Map<
-        string,
-        {
-          name:
-            string;
-
-          avatar_url:
-            string | null;
-        }
-      >();
-
-    for (
-      const profile of
-      profilesData ||
-      []
-    ) {
-      profileMap.set(
-        profile.id,
-        {
-          name:
-            profile.name,
-
-          avatar_url:
-            profile.avatar_url,
-        }
-      );
-    }
-
-    const finalMessages:
-      ChatMessage[] =
-      rows.map(
-        (
-          row
-        ) => {
-          const profile =
-            profileMap.get(
-              row.user_id
-            );
-
-          return {
-            ...row,
-
-            author:
-              profile?.name ||
-              "Usuário",
-
-            avatar_url:
-              profile?.avatar_url ||
-              null,
-          };
-        }
-      );
-
-    setMessages(
-      finalMessages
+    const userIds = Array.from(
+      new Set(rows.map((row) => row.user_id))
     );
+
+    const { data: profilesData } = await supabase
+      .from("profiles")
+      .select("id,name,avatar_url")
+      .in("id", userIds);
+
+    const profileMap = new Map<
+      string,
+      {
+        name: string;
+        avatar_url: string | null;
+      }
+    >();
+
+    for (const profile of profilesData || []) {
+      profileMap.set(profile.id, {
+        name: profile.name,
+        avatar_url: profile.avatar_url,
+      });
+    }
+
+    const finalMessages: ChatMessage[] = rows.map((row) => {
+      const profile = profileMap.get(row.user_id);
+
+      return {
+        ...row,
+
+        author: profile?.name || "Usuário",
+
+        avatar_url: profile?.avatar_url || null,
+      };
+    });
+
+    setMessages(finalMessages);
   }
 
   useEffect(() => {
-    if (
-      !currentChannelId
-    ) {
-      setMessages(
-        []
-      );
-
+    if (!currentChannelId) {
+      setMessages([]);
       return;
     }
 
-    void fetchMessages(
-      currentChannelId
-    );
+    void fetchMessages(currentChannelId);
 
-    const realtimeChannel =
-      supabase
-        .channel(
-          `messages-${currentChannelId}`
-        )
-        .on(
-          "postgres_changes",
-          {
-            event:
-              "INSERT",
+    const realtimeChannel = supabase
+      .channel(`messages-${currentChannelId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
 
-            schema:
-              "public",
+          filter: `channel_id=eq.${currentChannelId}`,
+        },
 
-            table:
-              "messages",
-
-            filter:
-              `channel_id=eq.${currentChannelId}`,
-          },
-
-          () => {
-            void fetchMessages(
-              currentChannelId
-            );
-          }
-        )
-        .subscribe();
+        () => {
+          void fetchMessages(currentChannelId);
+        }
+      )
+      .subscribe();
 
     return () => {
-      void supabase.removeChannel(
-        realtimeChannel
-      );
+      void supabase.removeChannel(realtimeChannel);
     };
-  }, [
-    currentChannelId,
-  ]);
+  }, [currentChannelId]);
 
   async function sendMessage() {
-    if (
-      !currentUser ||
-      !currentChannelId
-    ) {
-      return;
-    }
+    if (!currentUser || !currentChannelId) return;
 
-    const text =
-      message.trim();
+    const text = message.trim();
 
-    if (!text) {
-      return;
-    }
+    if (!text) return;
 
-    const {
-      error,
-    } =
-      await supabase
-        .from(
-          "messages"
-        )
-        .insert({
-          id:
-            crypto.randomUUID(),
+    const { error } = await supabase
+      .from("messages")
+      .insert({
+        id: crypto.randomUUID(),
 
-          channel_id:
-            currentChannelId,
+        channel_id: currentChannelId,
 
-          user_id:
-            currentUser.id,
+        user_id: currentUser.id,
 
-          content:
-            text,
-        });
+        content: text,
+      });
 
     if (error) {
-      alert(
-        error.message
-      );
-
+      alert(error.message);
       return;
     }
 
-    setMessage(
-      ""
-    );
+    setMessage("");
 
-    await fetchMessages(
-      currentChannelId
-    );
+    await fetchMessages(currentChannelId);
   }
 
   function handleMessageKeyDown(
-    event:
-      KeyboardEvent<HTMLInputElement>
+    event: KeyboardEvent<HTMLInputElement>
   ) {
-    if (
-      event.key ===
-      "Enter"
-    ) {
+    if (event.key === "Enter") {
       void sendMessage();
     }
   }
 
-  /* =========================================
+  /* =======================================================
      PERFIL
-  ========================================= */
+  ======================================================= */
 
   function openProfile() {
-    if (!currentUser) {
-      return;
-    }
+    if (!currentUser) return;
 
-    setProfileName(
-      currentUser.name
-    );
+    setProfileName(currentUser.name);
 
-    setProfileStatus(
-      currentUser.status
-    );
+    setProfileStatus(currentUser.status);
 
-    setProfileError(
-      ""
-    );
+    setProfileError("");
 
-    setShowProfile(
-      true
-    );
+    setShowProfile(true);
   }
 
   function closeProfile() {
-    setShowProfile(
-      false
-    );
+    setShowProfile(false);
 
-    setProfileError(
-      ""
-    );
+    setProfileError("");
   }
 
   async function saveProfile() {
-    if (!currentUser) {
-      return;
-    }
+    if (!currentUser) return;
 
-    const name =
-      profileName.trim();
+    const name = profileName.trim();
 
-    const status =
-      profileStatus.trim() ||
-      "Online";
+    const status = profileStatus.trim() || "Online";
 
     if (!name) {
-      setProfileError(
-        "Digite seu nome."
-      );
-
+      setProfileError("Digite seu nome.");
       return;
     }
 
-    setProfileSaving(
-      true
-    );
+    setProfileSaving(true);
 
-    const {
-      error,
-    } =
-      await supabase
-        .from(
-          "profiles"
-        )
-        .update({
-          name,
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        name,
+        status,
 
-          status,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", currentUser.id);
 
-          updated_at:
-            new Date().toISOString(),
-        })
-        .eq(
-          "id",
-          currentUser.id
-        );
-
-    setProfileSaving(
-      false
-    );
+    setProfileSaving(false);
 
     if (error) {
-      setProfileError(
-        error.message
-      );
-
+      setProfileError(error.message);
       return;
     }
 
     if (authUser) {
-      await loadProfile(
-        authUser
-      );
+      await loadProfile(authUser);
     }
 
-    if (
-      currentServerId
-    ) {
-      await loadMembers(
-        currentServerId
-      );
+    if (currentServerId) {
+      await loadMembers(currentServerId);
     }
 
-    if (
-      currentChannelId
-    ) {
-      await fetchMessages(
-        currentChannelId
-      );
+    if (currentChannelId) {
+      await fetchMessages(currentChannelId);
     }
+
+    await loadFriendships();
 
     closeProfile();
   }
 
   function selectProfileImage() {
-    profileFileInputRef
-      .current
-      ?.click();
+    profileFileInputRef.current?.click();
   }
 
   async function handleProfileImage(
-    event:
-      ChangeEvent<HTMLInputElement>
+    event: ChangeEvent<HTMLInputElement>
   ) {
-    if (!currentUser) {
+    if (!currentUser) return;
+
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      alert("Escolha uma imagem.");
       return;
     }
 
-    const file =
-      event.target
-        .files?.[0];
-
-    if (!file) {
-      return;
-    }
-
-    if (
-      !file.type.startsWith(
-        "image/"
-      )
-    ) {
-      alert(
-        "Escolha uma imagem."
-      );
-
-      return;
-    }
-
-    if (
-      file.size >
-      10 *
-        1024 *
-        1024
-    ) {
-      alert(
-        "A imagem deve ter menos de 10 MB."
-      );
-
+    if (file.size > 10 * 1024 * 1024) {
+      alert("A imagem deve ter menos de 10 MB.");
       return;
     }
 
     try {
-      setProfileImageLoading(
-        true
-      );
+      setProfileImageLoading(true);
 
-      const avatar =
-        await compressImage(
-          file,
-          384,
-          0.75
-        );
+      const avatar = await compressImage(file, 384, 0.75);
 
-      const {
-        error,
-      } =
-        await supabase
-          .from(
-            "profiles"
-          )
-          .update({
-            avatar_url:
-              avatar,
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          avatar_url: avatar,
 
-            updated_at:
-              new Date().toISOString(),
-          })
-          .eq(
-            "id",
-            currentUser.id
-          );
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", currentUser.id);
 
       if (error) {
-        alert(
-          error.message
-        );
-
+        alert(error.message);
         return;
       }
 
       if (authUser) {
-        await loadProfile(
-          authUser
-        );
+        await loadProfile(authUser);
       }
 
-      if (
-        currentServerId
-      ) {
-        await loadMembers(
-          currentServerId
-        );
+      if (currentServerId) {
+        await loadMembers(currentServerId);
       }
 
-      if (
-        currentChannelId
-      ) {
-        await fetchMessages(
-          currentChannelId
-        );
+      if (currentChannelId) {
+        await fetchMessages(currentChannelId);
       }
+
+      await loadFriendships();
     } catch {
-      alert(
-        "Não foi possível processar a imagem."
-      );
+      alert("Não foi possível processar a imagem.");
     } finally {
-      setProfileImageLoading(
-        false
-      );
+      setProfileImageLoading(false);
 
-      event.target.value =
-        "";
+      event.target.value = "";
     }
   }
 
   async function removeProfileImage() {
-    if (!currentUser) {
-      return;
-    }
+    if (!currentUser) return;
 
     await supabase
-      .from(
-        "profiles"
-      )
+      .from("profiles")
       .update({
-        avatar_url:
-          null,
+        avatar_url: null,
       })
-      .eq(
-        "id",
-        currentUser.id
-      );
+      .eq("id", currentUser.id);
 
     if (authUser) {
-      await loadProfile(
-        authUser
-      );
+      await loadProfile(authUser);
     }
+
+    await loadFriendships();
   }
 
-  /* =========================================
+  /* =======================================================
      CARREGANDO
-  ========================================= */
+  ======================================================= */
 
   if (authChecking) {
     return (
       <div className="auth-page">
         <div className="auth-card">
           <div className="auth-card-header">
-            <h2>
-              CONEXÃO
-            </h2>
-
-            <p>
-              Verificando sua conta...
-            </p>
+            <h2>CONEXÃO</h2>
+            <p>Verificando sua conta...</p>
           </div>
         </div>
       </div>
     );
   }
 
-  /* =========================================
+  /* =======================================================
      NOVA SENHA
-  ========================================= */
+  ======================================================= */
 
-  if (
-    passwordRecoveryMode
-  ) {
+  if (passwordRecoveryMode) {
     return (
       <div className="auth-page">
         <div className="auth-glow auth-glow-one" />
         <div className="auth-glow auth-glow-two" />
 
         <div className="auth-brand">
-          <div className="auth-logo">
-            C
-          </div>
+          <div className="auth-logo">C</div>
 
           <div>
-            <h1>
-              CONEXÃO
-            </h1>
-
-            <p>
-              Proteja sua conta.
-            </p>
+            <h1>CONEXÃO</h1>
+            <p>Proteja sua conta.</p>
           </div>
         </div>
 
         <div className="auth-card">
           <div className="auth-card-header">
-            <h2>
-              Criar nova senha
-            </h2>
+            <h2>Criar nova senha</h2>
 
-            <p>
-              Digite sua nova senha para continuar.
-            </p>
+            <p>Digite sua nova senha para continuar.</p>
           </div>
 
-          <form
-            onSubmit={
-              handleNewPassword
-            }
-          >
+          <form onSubmit={handleNewPassword}>
             <div className="auth-field">
-              <label>
-                NOVA SENHA
-              </label>
+              <label>NOVA SENHA</label>
 
               <input
                 type="password"
                 placeholder="Mínimo 6 caracteres"
-                value={
-                  newPassword
-                }
-                onChange={(
-                  event
-                ) => {
-                  setNewPassword(
-                    event.target
-                      .value
-                  );
-
-                  setNewPasswordError(
-                    ""
-                  );
+                value={newPassword}
+                onChange={(event) => {
+                  setNewPassword(event.target.value);
+                  setNewPasswordError("");
                 }}
               />
             </div>
 
             <div className="auth-field">
-              <label>
-                CONFIRMAR NOVA SENHA
-              </label>
+              <label>CONFIRMAR NOVA SENHA</label>
 
               <input
                 type="password"
                 placeholder="Repita sua nova senha"
-                value={
-                  confirmNewPassword
-                }
-                onChange={(
-                  event
-                ) => {
-                  setConfirmNewPassword(
-                    event.target
-                      .value
-                  );
-
-                  setNewPasswordError(
-                    ""
-                  );
+                value={confirmNewPassword}
+                onChange={(event) => {
+                  setConfirmNewPassword(event.target.value);
+                  setNewPasswordError("");
                 }}
               />
             </div>
 
             {newPasswordError && (
               <div className="auth-error">
-                {
-                  newPasswordError
-                }
+                {newPasswordError}
               </div>
             )}
 
             <button
               className="auth-submit"
               type="submit"
-              disabled={
-                newPasswordLoading
-              }
+              disabled={newPasswordLoading}
             >
               {newPasswordLoading
                 ? "Alterando..."
@@ -3663,87 +2402,54 @@ function App() {
     );
   }
 
-  /* =========================================
+  /* =======================================================
      ESQUECI A SENHA
-  ========================================= */
+  ======================================================= */
 
-  if (
-    !currentUser &&
-    showForgotPassword
-  ) {
+  if (!currentUser && showForgotPassword) {
     return (
       <div className="auth-page">
         <div className="auth-glow auth-glow-one" />
         <div className="auth-glow auth-glow-two" />
 
         <div className="auth-brand">
-          <div className="auth-logo">
-            C
-          </div>
+          <div className="auth-logo">C</div>
 
           <div>
-            <h1>
-              CONEXÃO
-            </h1>
-
-            <p>
-              Recupere sua conta.
-            </p>
+            <h1>CONEXÃO</h1>
+            <p>Recupere sua conta.</p>
           </div>
         </div>
 
         <div className="auth-card">
           <div className="auth-card-header">
-            <h2>
-              Redefinir senha
-            </h2>
+            <h2>Redefinir senha</h2>
 
             <p>
               Enviaremos um link de recuperação para seu e-mail.
             </p>
           </div>
 
-          <form
-            onSubmit={
-              handleForgotPassword
-            }
-          >
+          <form onSubmit={handleForgotPassword}>
             <div className="auth-field">
-              <label>
-                E-MAIL
-              </label>
+              <label>E-MAIL</label>
 
               <input
                 type="email"
                 autoFocus
                 placeholder="voce@email.com"
-                value={
-                  recoveryEmail
-                }
-                onChange={(
-                  event
-                ) => {
-                  setRecoveryEmail(
-                    event.target
-                      .value
-                  );
-
-                  setRecoveryError(
-                    ""
-                  );
-
-                  setRecoverySuccess(
-                    ""
-                  );
+                value={recoveryEmail}
+                onChange={(event) => {
+                  setRecoveryEmail(event.target.value);
+                  setRecoveryError("");
+                  setRecoverySuccess("");
                 }}
               />
             </div>
 
             {recoveryError && (
               <div className="auth-error">
-                {
-                  recoveryError
-                }
+                {recoveryError}
               </div>
             )}
 
@@ -3751,28 +2457,19 @@ function App() {
               <div
                 className="auth-error"
                 style={{
-                  color:
-                    "#72e6a0",
-
-                  borderColor:
-                    "rgba(70,220,130,.25)",
-
-                  background:
-                    "rgba(70,220,130,.06)",
+                  color: "#72e6a0",
+                  borderColor: "rgba(70,220,130,.25)",
+                  background: "rgba(70,220,130,.06)",
                 }}
               >
-                {
-                  recoverySuccess
-                }
+                {recoverySuccess}
               </div>
             )}
 
             <button
               className="auth-submit"
               type="submit"
-              disabled={
-                recoveryLoading
-              }
+              disabled={recoveryLoading}
             >
               {recoveryLoading
                 ? "Enviando..."
@@ -3785,9 +2482,7 @@ function App() {
 
             <button
               type="button"
-              onClick={
-                closeForgotPassword
-              }
+              onClick={closeForgotPassword}
             >
               Voltar para entrar
             </button>
@@ -3797,9 +2492,9 @@ function App() {
     );
   }
 
-  /* =========================================
+  /* =======================================================
      LOGIN / CADASTRO
-  ========================================= */
+  ======================================================= */
 
   if (!currentUser) {
     return (
@@ -3808,33 +2503,24 @@ function App() {
         <div className="auth-glow auth-glow-two" />
 
         <div className="auth-brand">
-          <div className="auth-logo">
-            C
-          </div>
+          <div className="auth-logo">C</div>
 
           <div>
-            <h1>
-              CONEXÃO
-            </h1>
-
-            <p>
-              Converse. Crie. Conecte-se.
-            </p>
+            <h1>CONEXÃO</h1>
+            <p>Converse. Crie. Conecte-se.</p>
           </div>
         </div>
 
         <div className="auth-card">
           <div className="auth-card-header">
             <h2>
-              {authMode ===
-              "login"
+              {authMode === "login"
                 ? "Bem-vindo de volta"
                 : "Criar sua conta"}
             </h2>
 
             <p>
-              {authMode ===
-              "login"
+              {authMode === "login"
                 ? "Entre para continuar no CONEXÃO."
                 : "Crie sua conta e confirme seu e-mail."}
             </p>
@@ -3843,29 +2529,13 @@ function App() {
           {pendingInviteCode && (
             <div
               style={{
-                marginBottom:
-                  "16px",
-
-                padding:
-                  "12px",
-
-                border:
-                  "1px solid rgba(109,93,252,.3)",
-
-                borderRadius:
-                  "12px",
-
-                background:
-                  "rgba(109,93,252,.08)",
-
-                color:
-                  "#b9c1ff",
-
-                fontSize:
-                  "12px",
-
-                lineHeight:
-                  1.5,
+                marginBottom: "16px",
+                padding: "12px",
+                border: "1px solid rgba(109,93,252,.3)",
+                borderRadius: "12px",
+                background: "rgba(109,93,252,.08)",
+                color: "#b9c1ff",
+                fontSize: "12px",
               }}
             >
               🔗 Você recebeu um convite para um servidor.
@@ -3875,144 +2545,81 @@ function App() {
 
           <form
             onSubmit={
-              authMode ===
-              "login"
+              authMode === "login"
                 ? handleLogin
                 : handleRegister
             }
           >
-            {authMode ===
-              "register" && (
+            {authMode === "register" && (
               <div className="auth-field">
-                <label>
-                  NOME
-                </label>
+                <label>NOME</label>
 
                 <input
                   type="text"
                   placeholder="Seu nome"
-                  value={
-                    authName
-                  }
-                  onChange={(
-                    event
-                  ) =>
-                    setAuthName(
-                      event.target
-                        .value
-                    )
+                  value={authName}
+                  onChange={(event) =>
+                    setAuthName(event.target.value)
                   }
                 />
               </div>
             )}
 
             <div className="auth-field">
-              <label>
-                E-MAIL
-              </label>
+              <label>E-MAIL</label>
 
               <input
                 type="email"
                 placeholder="voce@email.com"
-                value={
-                  authEmail
-                }
-                onChange={(
-                  event
-                ) =>
-                  setAuthEmail(
-                    event.target
-                      .value
-                  )
+                value={authEmail}
+                onChange={(event) =>
+                  setAuthEmail(event.target.value)
                 }
               />
             </div>
 
             <div className="auth-field">
-              <label>
-                SENHA
-              </label>
+              <label>SENHA</label>
 
               <input
                 type="password"
                 placeholder="Mínimo 6 caracteres"
-                value={
-                  authPassword
-                }
-                onChange={(
-                  event
-                ) =>
-                  setAuthPassword(
-                    event.target
-                      .value
-                  )
+                value={authPassword}
+                onChange={(event) =>
+                  setAuthPassword(event.target.value)
                 }
               />
             </div>
 
-            {authMode ===
-              "login" && (
+            {authMode === "login" && (
               <button
                 type="button"
-                onClick={
-                  openForgotPassword
-                }
+                onClick={openForgotPassword}
                 style={{
-                  width:
-                    "100%",
-
-                  border:
-                    "none",
-
-                  background:
-                    "transparent",
-
-                  color:
-                    "#8295ff",
-
-                  textAlign:
-                    "right",
-
-                  cursor:
-                    "pointer",
-
-                  fontSize:
-                    "12px",
-
-                  marginTop:
-                    "-2px",
-
-                  marginBottom:
-                    "14px",
-
-                  padding:
-                    0,
+                  width: "100%",
+                  border: "none",
+                  background: "transparent",
+                  color: "#8295ff",
+                  textAlign: "right",
+                  cursor: "pointer",
+                  fontSize: "12px",
+                  marginBottom: "14px",
                 }}
               >
                 Esqueceu sua senha?
               </button>
             )}
 
-            {authMode ===
-              "register" && (
+            {authMode === "register" && (
               <div className="auth-field">
-                <label>
-                  CONFIRMAR SENHA
-                </label>
+                <label>CONFIRMAR SENHA</label>
 
                 <input
                   type="password"
                   placeholder="Repita sua senha"
-                  value={
-                    authConfirmPassword
-                  }
-                  onChange={(
-                    event
-                  ) =>
-                    setAuthConfirmPassword(
-                      event.target
-                        .value
-                    )
+                  value={authConfirmPassword}
+                  onChange={(event) =>
+                    setAuthConfirmPassword(event.target.value)
                   }
                 />
               </div>
@@ -4020,9 +2627,7 @@ function App() {
 
             {authError && (
               <div className="auth-error">
-                {
-                  authError
-                }
+                {authError}
               </div>
             )}
 
@@ -4030,33 +2635,23 @@ function App() {
               <div
                 className="auth-error"
                 style={{
-                  color:
-                    "#72e6a0",
-
-                  borderColor:
-                    "rgba(70,220,130,.25)",
-
-                  background:
-                    "rgba(70,220,130,.06)",
+                  color: "#72e6a0",
+                  borderColor: "rgba(70,220,130,.25)",
+                  background: "rgba(70,220,130,.06)",
                 }}
               >
-                {
-                  authSuccess
-                }
+                {authSuccess}
               </div>
             )}
 
             <button
               className="auth-submit"
               type="submit"
-              disabled={
-                authLoading
-              }
+              disabled={authLoading}
             >
               {authLoading
                 ? "Aguarde..."
-                : authMode ===
-                    "login"
+                : authMode === "login"
                   ? "Entrar"
                   : "Criar conta"}
             </button>
@@ -4065,30 +2660,15 @@ function App() {
           {lastSignupEmail && (
             <button
               type="button"
-              onClick={
-                resendConfirmation
-              }
-              disabled={
-                resendLoading
-              }
+              onClick={resendConfirmation}
+              disabled={resendLoading}
               style={{
-                width:
-                  "100%",
-
-                marginTop:
-                  "12px",
-
-                border:
-                  "none",
-
-                background:
-                  "transparent",
-
-                color:
-                  "#8295ff",
-
-                cursor:
-                  "pointer",
+                width: "100%",
+                marginTop: "12px",
+                border: "none",
+                background: "transparent",
+                color: "#8295ff",
+                cursor: "pointer",
               }}
             >
               {resendLoading
@@ -4098,18 +2678,13 @@ function App() {
           )}
 
           <div className="auth-switch">
-            {authMode ===
-            "login" ? (
+            {authMode === "login" ? (
               <>
                 Ainda não tem uma conta?{" "}
 
                 <button
                   type="button"
-                  onClick={() =>
-                    changeAuthMode(
-                      "register"
-                    )
-                  }
+                  onClick={() => changeAuthMode("register")}
                 >
                   Criar conta
                 </button>
@@ -4120,11 +2695,7 @@ function App() {
 
                 <button
                   type="button"
-                  onClick={() =>
-                    changeAuthMode(
-                      "login"
-                    )
-                  }
+                  onClick={() => changeAuthMode("login")}
                 >
                   Entrar
                 </button>
@@ -4136,425 +2707,335 @@ function App() {
     );
   }
 
-  if (
-    joinInviteLoading
-  ) {
+  if (joinInviteLoading) {
     return (
       <div className="auth-page">
         <div className="auth-card">
           <div className="auth-card-header">
-            <h2>
-              Entrando no servidor...
-            </h2>
+            <h2>Entrando no servidor...</h2>
 
-            <p>
-              Estamos validando seu convite.
-            </p>
+            <p>Estamos validando seu convite.</p>
           </div>
         </div>
       </div>
     );
   }
 
-  if (
-    appLoading &&
-    servers.length ===
-      0
-  ) {
+  if (appLoading && servers.length === 0) {
     return (
       <div className="auth-page">
         <div className="auth-card">
           <div className="auth-card-header">
-            <h2>
-              CONEXÃO
-            </h2>
+            <h2>CONEXÃO</h2>
 
-            <p>
-              Carregando comunidades...
-            </p>
+            <p>Carregando comunidades...</p>
           </div>
         </div>
       </div>
     );
   }
 
-  /* =========================================
+  /* =======================================================
      APP PRINCIPAL
-  ========================================= */
+  ======================================================= */
 
   return (
     <div className="app">
       <input
-        ref={
-          serverFileInputRef
-        }
+        ref={serverFileInputRef}
         className="server-file-input"
         type="file"
         accept="image/*"
-        onChange={
-          handleServerImage
-        }
+        onChange={handleServerImage}
       />
 
       <input
-        ref={
-          profileFileInputRef
-        }
+        ref={profileFileInputRef}
         className="server-file-input"
         type="file"
         accept="image/*"
-        onChange={
-          handleProfileImage
-        }
+        onChange={handleProfileImage}
       />
 
-      {(joinInviteError ||
-        joinInviteSuccess) && (
+      {(joinInviteError || joinInviteSuccess) && (
         <div
           style={{
-            position:
-              "fixed",
-
-            top:
-              "18px",
-
-            left:
-              "50%",
-
-            transform:
-              "translateX(-50%)",
-
-            zIndex:
-              9999,
-
-            minWidth:
-              "320px",
-
-            maxWidth:
-              "520px",
-
-            padding:
-              "12px 14px",
-
-            borderRadius:
-              "12px",
-
-            border:
-              joinInviteError
-                ? "1px solid rgba(255,90,90,.35)"
-                : "1px solid rgba(70,220,130,.3)",
-
-            background:
-              joinInviteError
-                ? "rgba(70,15,20,.96)"
-                : "rgba(15,55,35,.96)",
-
-            color:
-              "#ffffff",
-
-            boxShadow:
-              "0 14px 40px rgba(0,0,0,.35)",
-
-            display:
-              "flex",
-
-            alignItems:
-              "center",
-
-            justifyContent:
-              "space-between",
-
-            gap:
-              "16px",
-
-            fontSize:
-              "13px",
+            position: "fixed",
+            top: "18px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 9999,
+            padding: "12px 16px",
+            borderRadius: "12px",
+            background: joinInviteError
+              ? "#421a21"
+              : "#133825",
+            color: "#fff",
           }}
         >
-          <span>
-            {joinInviteError ||
-              joinInviteSuccess}
-          </span>
-
-          <button
-            type="button"
-            onClick={() => {
-              setJoinInviteError(
-                ""
-              );
-
-              setJoinInviteSuccess(
-                ""
-              );
-            }}
-            style={{
-              border:
-                "none",
-
-              background:
-                "transparent",
-
-              color:
-                "#ffffff",
-
-              cursor:
-                "pointer",
-
-              fontSize:
-                "18px",
-            }}
-          >
-            ×
-          </button>
+          {joinInviteError || joinInviteSuccess}
         </div>
       )}
 
-      <aside className="servers">
-        <div className="logo">
-          C
-        </div>
+      {/* ===================================================
+          SERVIDORES
+      =================================================== */}
 
-        {servers.map(
-          (
-            server
-          ) => (
-            <button
-              key={
-                server.id
-              }
-              className={
-                server.id ===
-                currentServerId
-                  ? "server active"
-                  : "server"
-              }
-              onClick={() =>
-                changeServer(
-                  server.id
-                )
-              }
-              title={
-                server.name
-              }
-            >
-              {server.icon_url ? (
-                <img
-                  src={
-                    server.icon_url
-                  }
-                  alt={
-                    server.name
-                  }
-                  className="server-image"
-                />
-              ) : (
-                createShortName(
-                  server.name
-                )
-              )}
-            </button>
-          )
-        )}
+      <aside className="servers">
+        <div className="logo">C</div>
+
+        <button
+          className={
+            mainMode === "friends" || mainMode === "dm"
+              ? "server active"
+              : "server"
+          }
+          onClick={openFriends}
+          title="Amigos"
+        >
+          👥
+        </button>
+
+        {servers.map((server) => (
+          <button
+            key={server.id}
+            className={
+              mainMode === "server" &&
+              server.id === currentServerId
+                ? "server active"
+                : "server"
+            }
+            onClick={() => changeServer(server.id)}
+            title={server.name}
+          >
+            {server.icon_url ? (
+              <img
+                src={server.icon_url}
+                alt={server.name}
+                className="server-image"
+              />
+            ) : (
+              createShortName(server.name)
+            )}
+          </button>
+        ))}
 
         <button
           className="server add"
-          onClick={
-            openCreateServer
-          }
+          onClick={openCreateServer}
           title="Criar servidor"
         >
           +
         </button>
       </aside>
 
+      {/* ===================================================
+          SIDEBAR
+      =================================================== */}
+
       <aside className="channels">
-        {currentServer && (
+        {mainMode === "server" ? (
+          <>
+            {currentServer && (
+              <>
+                <div className="workspace">
+                  <div className="workspace-info">
+                    <h2>{currentServer.name}</h2>
+
+                    <span>
+                      {isServerOwner
+                        ? "Proprietário"
+                        : "Membro"}
+                    </span>
+                  </div>
+
+                  {isServerOwner && (
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "4px",
+                      }}
+                    >
+                      <button
+                        className="workspace-settings"
+                        onClick={openInviteModal}
+                        title="Convidar pessoas"
+                      >
+                        🔗
+                      </button>
+
+                      <button
+                        className="workspace-settings"
+                        onClick={openEditServer}
+                        title="Configurações"
+                      >
+                        ⚙
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="channel-group">
+                  <div className="channel-group-title">
+                    <p>CANAIS DE TEXTO</p>
+
+                    {isServerOwner && (
+                      <button
+                        className="add-channel"
+                        onClick={openCreateChannel}
+                      >
+                        +
+                      </button>
+                    )}
+                  </div>
+
+                  {channels.map((channel) => (
+                    <div
+                      className="channel-row"
+                      key={channel.id}
+                    >
+                      <button
+                        className={
+                          channel.id === currentChannelId
+                            ? "channel active"
+                            : "channel"
+                        }
+                        onClick={() =>
+                          changeChannel(channel.id)
+                        }
+                      >
+                        # {channel.name}
+                      </button>
+
+                      {isServerOwner && (
+                        <div className="channel-actions">
+                          <button
+                            onClick={() =>
+                              openEditChannel(channel)
+                            }
+                          >
+                            ✏️
+                          </button>
+
+                          <button
+                            onClick={() =>
+                              void deleteChannel(channel.id)
+                            }
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="channel-group">
+                  <p>CANAIS DE VOZ</p>
+
+                  <button className="channel">
+                    🔊 Sala geral
+                  </button>
+
+                  <button className="channel">
+                    🔊 Jogando
+                  </button>
+                </div>
+              </>
+            )}
+          </>
+        ) : (
           <>
             <div className="workspace">
               <div className="workspace-info">
-                <h2>
-                  {
-                    currentServer.name
-                  }
-                </h2>
-
-                <span>
-                  {isServerOwner
-                    ? "Proprietário"
-                    : "Membro"}
-                </span>
+                <h2>AMIGOS</h2>
+                <span>Mensagens privadas</span>
               </div>
+            </div>
 
-              {isServerOwner && (
+            <div className="channel-group">
+              <p>NAVEGAÇÃO</p>
+
+              <button
+                className={
+                  mainMode === "friends"
+                    ? "channel active"
+                    : "channel"
+                }
+                onClick={openFriends}
+              >
+                👥 Todos os amigos
+              </button>
+
+              {incomingRequests.length > 0 && (
+                <button
+                  className="channel"
+                  onClick={openFriends}
+                >
+                  🔔 Solicitações ({incomingRequests.length})
+                </button>
+              )}
+            </div>
+
+            <div className="channel-group">
+              <p>MENSAGENS PRIVADAS</p>
+
+              {friends.length === 0 ? (
                 <div
                   style={{
-                    display:
-                      "flex",
-
-                    alignItems:
-                      "center",
-
-                    gap:
-                      "4px",
+                    color: "#646b7a",
+                    fontSize: "12px",
+                    padding: "8px",
                   }}
                 >
-                  <button
-                    className="workspace-settings"
-                    onClick={
-                      openInviteModal
-                    }
-                    title="Convidar pessoas"
-                  >
-                    🔗
-                  </button>
-
-                  <button
-                    className="workspace-settings"
-                    onClick={
-                      openEditServer
-                    }
-                    title="Configurações"
-                  >
-                    ⚙
-                  </button>
+                  Nenhum amigo ainda.
                 </div>
-              )}
-            </div>
-
-            <div className="channel-group">
-              <div className="channel-group-title">
-                <p>
-                  CANAIS DE TEXTO
-                </p>
-
-                {isServerOwner && (
+              ) : (
+                friends.map((friend) => (
                   <button
-                    className="add-channel"
-                    onClick={
-                      openCreateChannel
+                    key={friend.friendship_id}
+                    className={
+                      mainMode === "dm" &&
+                      activeDmUser?.id === friend.user.id
+                        ? "channel active"
+                        : "channel"
                     }
+                    onClick={() => openDm(friend.user)}
                   >
-                    +
+                    💬 {friend.user.name}
                   </button>
-                )}
-              </div>
-
-              {channels.map(
-                (
-                  channel
-                ) => (
-                  <div
-                    className="channel-row"
-                    key={
-                      channel.id
-                    }
-                  >
-                    <button
-                      className={
-                        channel.id ===
-                        currentChannelId
-                          ? "channel active"
-                          : "channel"
-                      }
-                      onClick={() =>
-                        changeChannel(
-                          channel.id
-                        )
-                      }
-                    >
-                      #{" "}
-                      {
-                        channel.name
-                      }
-                    </button>
-
-                    {isServerOwner && (
-                      <div className="channel-actions">
-                        <button
-                          onClick={() =>
-                            openEditChannel(
-                              channel
-                            )
-                          }
-                        >
-                          ✏️
-                        </button>
-
-                        <button
-                          onClick={() =>
-                            void deleteChannel(
-                              channel.id
-                            )
-                          }
-                        >
-                          🗑️
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )
+                ))
               )}
-            </div>
-
-            <div className="channel-group">
-              <p>
-                CANAIS DE VOZ
-              </p>
-
-              <button className="channel">
-                🔊 Sala geral
-              </button>
-
-              <button className="channel">
-                🔊 Jogando
-              </button>
             </div>
           </>
         )}
 
         <div
           className="profile profile-clickable"
-          onClick={
-            openProfile
-          }
+          onClick={openProfile}
         >
           <div className="avatar">
             {currentUser.avatar_url ? (
               <img
-                src={
-                  currentUser.avatar_url
-                }
+                src={currentUser.avatar_url}
                 alt=""
                 className="profile-avatar-image"
               />
             ) : (
-              currentUser.name
-                .charAt(0)
-                .toUpperCase()
+              currentUser.name.charAt(0).toUpperCase()
             )}
           </div>
 
           <div className="profile-info">
-            <strong>
-              {
-                currentUser.name
-              }
-            </strong>
+            <strong>{currentUser.name}</strong>
 
-            <span>
-              {
-                currentUser.status
-              }
-            </span>
+            <span>{currentUser.status}</span>
           </div>
 
           <button
             className="settings-button"
-            onClick={(
-              event
-            ) => {
+            onClick={(event) => {
               event.stopPropagation();
-
               void logout();
             }}
             title="Sair"
@@ -4564,371 +3045,715 @@ function App() {
         </div>
       </aside>
 
-      <main className="chat">
-        {currentChannel ? (
-          <>
-            <header className="chat-header">
-              <div className="chat-title">
-                <strong>
-                  #{" "}
-                  {
-                    currentChannel.name
-                  }
-                </strong>
+      {/* ===================================================
+          CHAT DO SERVIDOR
+      =================================================== */}
 
-                <span>
-                  {
-                    currentChannel.description
-                  }
-                </span>
-              </div>
+      {mainMode === "server" && (
+        <main className="chat">
+          {currentChannel ? (
+            <>
+              <header className="chat-header">
+                <div className="chat-title">
+                  <strong># {currentChannel.name}</strong>
 
-              <div className="header-actions">
-                <button>
-                  🔔
-                </button>
+                  <span>{currentChannel.description}</span>
+                </div>
+              </header>
 
-                <button>
-                  👥
-                </button>
-              </div>
-            </header>
+              <section className="messages">
+                <div className="welcome">
+                  <div className="welcome-icon">#</div>
 
-            <section className="messages">
-              <div className="welcome">
-                <div className="welcome-icon">
-                  #
+                  <h1>
+                    Bem-vindo ao #{currentChannel.name}
+                  </h1>
+
+                  <p>{currentChannel.description}</p>
                 </div>
 
-                <h1>
-                  Bem-vindo ao #
-                  {
-                    currentChannel.name
-                  }
-                </h1>
-
-                <p>
-                  {
-                    currentChannel.description
-                  }
-                </p>
-              </div>
-
-              {messages.map(
-                (
-                  item
-                ) => (
-                  <div
-                    className="message"
-                    key={
-                      item.id
-                    }
-                  >
+                {messages.map((item) => (
+                  <div className="message" key={item.id}>
                     <div className="message-avatar">
                       {item.avatar_url ? (
                         <img
-                          src={
-                            item.avatar_url
-                          }
+                          src={item.avatar_url}
                           alt=""
                           className="member-profile-image"
                         />
                       ) : (
-                        item.author
-                          .charAt(
-                            0
-                          )
-                          .toUpperCase()
+                        item.author.charAt(0).toUpperCase()
                       )}
                     </div>
 
                     <div className="message-content">
                       <div className="message-info">
-                        <strong>
-                          {
-                            item.author
-                          }
-                        </strong>
+                        <strong>{item.author}</strong>
 
                         <span>
                           {new Date(
                             item.created_at
-                          ).toLocaleTimeString(
-                            "pt-BR",
-                            {
-                              hour:
-                                "2-digit",
-
-                              minute:
-                                "2-digit",
-                            }
-                          )}
+                          ).toLocaleTimeString("pt-BR", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
                         </span>
                       </div>
 
-                      <p>
-                        {
-                          item.content
-                        }
-                      </p>
+                      <p>{item.content}</p>
                     </div>
                   </div>
-                )
-              )}
-            </section>
+                ))}
+              </section>
 
-            <div className="message-box">
-              <button>
-                +
-              </button>
+              <div className="message-box">
+                <button>+</button>
 
-              <input
-                type="text"
-                placeholder={`Mensagem em #${currentChannel.name}`}
-                value={
-                  message
-                }
-                onChange={(
-                  event
-                ) =>
-                  setMessage(
-                    event.target
-                      .value
-                  )
-                }
-                onKeyDown={
-                  handleMessageKeyDown
-                }
-              />
+                <input
+                  type="text"
+                  placeholder={`Mensagem em #${currentChannel.name}`}
+                  value={message}
+                  onChange={(event) =>
+                    setMessage(event.target.value)
+                  }
+                  onKeyDown={handleMessageKeyDown}
+                />
 
-              <button>
-                😊
-              </button>
+                <button>😊</button>
 
-              <button
-                onClick={() =>
-                  void sendMessage()
-                }
+                <button
+                  onClick={() => void sendMessage()}
+                >
+                  ➤
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="welcome">
+              <h1>CONEXÃO</h1>
+              <p>Selecione um canal.</p>
+            </div>
+          )}
+        </main>
+      )}
+
+      {/* ===================================================
+          TELA DE AMIGOS
+      =================================================== */}
+
+      {mainMode === "friends" && (
+        <main className="chat">
+          <header className="chat-header">
+            <div className="chat-title">
+              <strong>👥 Amigos</strong>
+              <span>
+                Adicione pessoas e converse em particular
+              </span>
+            </div>
+          </header>
+
+          <section
+            className="messages"
+            style={{
+              padding: "28px",
+              overflowY: "auto",
+            }}
+          >
+            <div
+              style={{
+                maxWidth: "900px",
+                margin: "0 auto",
+              }}
+            >
+              <div
+                style={{
+                  background: "#11141d",
+                  border: "1px solid #262b38",
+                  borderRadius: "18px",
+                  padding: "22px",
+                  marginBottom: "24px",
+                }}
               >
-                ➤
+                <h2
+                  style={{
+                    margin: "0 0 6px",
+                    color: "#fff",
+                  }}
+                >
+                  Adicionar amigo
+                </h2>
+
+                <p
+                  style={{
+                    margin: "0 0 18px",
+                    color: "#747c8d",
+                    fontSize: "13px",
+                  }}
+                >
+                  Digite o e-mail da conta da pessoa.
+                </p>
+
+                <div className="friend-add-row">
+                  <input
+                    type="email"
+                    placeholder="amigo@email.com"
+                    value={friendEmail}
+                    onChange={(event) => {
+                      setFriendEmail(event.target.value);
+
+                      setFriendError("");
+                      setFriendSuccess("");
+                    }}
+                  />
+
+                  <button
+                    onClick={() => void sendFriendRequest()}
+                    disabled={friendActionLoading}
+                  >
+                    {friendActionLoading
+                      ? "Enviando..."
+                      : "Adicionar"}
+                  </button>
+                </div>
+
+                {friendError && (
+                  <p className="modal-error">
+                    {friendError}
+                  </p>
+                )}
+
+                {friendSuccess && (
+                  <p
+                    style={{
+                      color: "#72e6a0",
+                      fontSize: "12px",
+                      marginTop: "10px",
+                    }}
+                  >
+                    {friendSuccess}
+                  </p>
+                )}
+              </div>
+
+              {incomingRequests.length > 0 && (
+                <div
+                  style={{
+                    marginBottom: "30px",
+                  }}
+                >
+                  <h3
+                    style={{
+                      color: "#fff",
+                      marginBottom: "12px",
+                    }}
+                  >
+                    Solicitações recebidas —{" "}
+                    {incomingRequests.length}
+                  </h3>
+
+                  {incomingRequests.map((request) => (
+                    <div
+                      key={request.friendship_id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "14px",
+                        background: "#11141d",
+                        border: "1px solid #262b38",
+                        borderRadius: "14px",
+                        padding: "14px",
+                        marginBottom: "8px",
+                      }}
+                    >
+                      <div className="member-avatar online">
+                        {request.user.avatar_url ? (
+                          <img
+                            src={request.user.avatar_url}
+                            alt=""
+                            className="member-profile-image"
+                          />
+                        ) : (
+                          request.user.name
+                            .charAt(0)
+                            .toUpperCase()
+                        )}
+                      </div>
+
+                      <div
+                        style={{
+                          flex: 1,
+                        }}
+                      >
+                        <strong
+                          style={{
+                            color: "#fff",
+                            display: "block",
+                          }}
+                        >
+                          {request.user.name}
+                        </strong>
+
+                        <span
+                          style={{
+                            color: "#707889",
+                            fontSize: "12px",
+                          }}
+                        >
+                          {request.user.email}
+                        </span>
+                      </div>
+
+                      <button
+                        className="modal-create"
+                        style={{
+                          minHeight: "36px",
+                        }}
+                        onClick={() =>
+                          void acceptFriendRequest(
+                            request.friendship_id
+                          )
+                        }
+                      >
+                        ✓ Aceitar
+                      </button>
+
+                      <button
+                        className="modal-cancel"
+                        style={{
+                          minHeight: "36px",
+                        }}
+                        onClick={() =>
+                          void rejectFriendRequest(
+                            request.friendship_id
+                          )
+                        }
+                      >
+                        Recusar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {outgoingRequests.length > 0 && (
+                <div
+                  style={{
+                    marginBottom: "30px",
+                  }}
+                >
+                  <h3
+                    style={{
+                      color: "#fff",
+                      marginBottom: "12px",
+                    }}
+                  >
+                    Solicitações enviadas
+                  </h3>
+
+                  {outgoingRequests.map((request) => (
+                    <div
+                      key={request.friendship_id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "14px",
+                        padding: "14px",
+                        borderBottom: "1px solid #1d2130",
+                      }}
+                    >
+                      <div className="member-avatar online">
+                        {request.user.avatar_url ? (
+                          <img
+                            src={request.user.avatar_url}
+                            alt=""
+                            className="member-profile-image"
+                          />
+                        ) : (
+                          request.user.name
+                            .charAt(0)
+                            .toUpperCase()
+                        )}
+                      </div>
+
+                      <div style={{ flex: 1 }}>
+                        <strong style={{ color: "#fff" }}>
+                          {request.user.name}
+                        </strong>
+
+                        <div
+                          style={{
+                            color: "#707889",
+                            fontSize: "12px",
+                          }}
+                        >
+                          Solicitação pendente
+                        </div>
+                      </div>
+
+                      <button
+                        className="modal-cancel"
+                        onClick={() =>
+                          void removeFriendship(
+                            request.friendship_id,
+                            request.user.name
+                          )
+                        }
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div>
+                <h3
+                  style={{
+                    color: "#fff",
+                    marginBottom: "12px",
+                  }}
+                >
+                  Amigos — {friends.length}
+                </h3>
+
+                {friendsLoading ? (
+                  <p style={{ color: "#747c8d" }}>
+                    Carregando...
+                  </p>
+                ) : friends.length === 0 ? (
+                  <div
+                    style={{
+                      padding: "40px",
+                      textAlign: "center",
+                      border: "1px dashed #292e3d",
+                      borderRadius: "16px",
+                      color: "#747c8d",
+                    }}
+                  >
+                    Você ainda não adicionou nenhum amigo.
+                  </div>
+                ) : (
+                  friends.map((friend) => (
+                    <div
+                      key={friend.friendship_id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "14px",
+                        padding: "14px",
+                        borderBottom: "1px solid #1d2130",
+                      }}
+                    >
+                      <div className="member-avatar online">
+                        {friend.user.avatar_url ? (
+                          <img
+                            src={friend.user.avatar_url}
+                            alt=""
+                            className="member-profile-image"
+                          />
+                        ) : (
+                          friend.user.name
+                            .charAt(0)
+                            .toUpperCase()
+                        )}
+                      </div>
+
+                      <div style={{ flex: 1 }}>
+                        <strong
+                          style={{
+                            color: "#fff",
+                            display: "block",
+                          }}
+                        >
+                          {friend.user.name}
+                        </strong>
+
+                        <span
+                          style={{
+                            color: "#707889",
+                            fontSize: "12px",
+                          }}
+                        >
+                          {friend.user.status || "Online"}
+                        </span>
+                      </div>
+
+                      <button
+                        className="modal-create"
+                        onClick={() => openDm(friend.user)}
+                      >
+                        💬 Mensagem
+                      </button>
+
+                      <button
+                        className="modal-cancel"
+                        onClick={() =>
+                          void removeFriendship(
+                            friend.friendship_id,
+                            friend.user.name
+                          )
+                        }
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </section>
+        </main>
+      )}
+
+      {/* ===================================================
+          DM
+      =================================================== */}
+
+      {mainMode === "dm" && activeDmUser && (
+        <main className="chat">
+          <header className="chat-header">
+            <div className="chat-title">
+              <strong>💬 {activeDmUser.name}</strong>
+
+              <span>
+                {activeDmUser.status || "Online"}
+              </span>
+            </div>
+
+            <div className="header-actions">
+              <button onClick={openFriends}>
+                👥
               </button>
             </div>
-          </>
-        ) : (
-          <div className="welcome">
-            <h1>
-              CONEXÃO
-            </h1>
+          </header>
 
-            <p>
-              Selecione um canal.
-            </p>
-          </div>
-        )}
-      </main>
-
-      <aside className="members">
-        <h3>
-          MEMBROS —{" "}
-          {
-            members.length
-          }
-        </h3>
-
-        {members.map(
-          (
-            member
-          ) => (
-            <div
-              className="member"
-              key={
-                member.id
-              }
-            >
-              <div className="member-avatar online">
-                {member.avatar_url ? (
+          <section className="messages">
+            <div className="welcome">
+              <div className="welcome-icon">
+                {activeDmUser.avatar_url ? (
                   <img
-                    src={
-                      member.avatar_url
-                    }
+                    src={activeDmUser.avatar_url}
                     alt=""
-                    className="member-profile-image"
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                      borderRadius: "50%",
+                    }}
                   />
                 ) : (
-                  member.name
-                    .charAt(
-                      0
-                    )
+                  activeDmUser.name
+                    .charAt(0)
                     .toUpperCase()
                 )}
               </div>
 
-              <span>
-                {
-                  member.name
-                }
+              <h1>{activeDmUser.name}</h1>
 
-                {member.role ===
-                  "owner" &&
-                  " 👑"}
-              </span>
+              <p>
+                Este é o começo da conversa entre vocês.
+              </p>
             </div>
-          )
+
+            {dmLoading && directMessages.length === 0 && (
+              <p
+                style={{
+                  color: "#747c8d",
+                  padding: "10px 20px",
+                }}
+              >
+                Carregando mensagens...
+              </p>
+            )}
+
+            {directMessages.map((item) => {
+              const isMe =
+                item.sender_id === currentUser.id;
+
+              const author = isMe
+                ? currentUser
+                : activeDmUser;
+
+              return (
+                <div className="message" key={item.id}>
+                  <div className="message-avatar">
+                    {author.avatar_url ? (
+                      <img
+                        src={author.avatar_url}
+                        alt=""
+                        className="member-profile-image"
+                      />
+                    ) : (
+                      author.name
+                        .charAt(0)
+                        .toUpperCase()
+                    )}
+                  </div>
+
+                  <div className="message-content">
+                    <div className="message-info">
+                      <strong>{author.name}</strong>
+
+                      <span>
+                        {new Date(
+                          item.created_at
+                        ).toLocaleTimeString("pt-BR", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    </div>
+
+                    <p>{item.content}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </section>
+
+          <div className="message-box">
+            <button>+</button>
+
+            <input
+              type="text"
+              placeholder={`Mensagem para ${activeDmUser.name}`}
+              value={dmText}
+              onChange={(event) =>
+                setDmText(event.target.value)
+              }
+              onKeyDown={handleDmKeyDown}
+            />
+
+            <button>😊</button>
+
+            <button
+              onClick={() => void sendDirectMessage()}
+            >
+              ➤
+            </button>
+          </div>
+        </main>
+      )}
+
+      {/* ===================================================
+          PAINEL DIREITO
+      =================================================== */}
+
+      <aside className="members">
+        {mainMode === "server" ? (
+          <>
+            <h3>MEMBROS — {members.length}</h3>
+
+            {members.map((member) => (
+              <div className="member" key={member.id}>
+                <div className="member-avatar online">
+                  {member.avatar_url ? (
+                    <img
+                      src={member.avatar_url}
+                      alt=""
+                      className="member-profile-image"
+                    />
+                  ) : (
+                    member.name.charAt(0).toUpperCase()
+                  )}
+                </div>
+
+                <span>
+                  {member.name}
+
+                  {member.role === "owner" && " 👑"}
+                </span>
+              </div>
+            ))}
+          </>
+        ) : (
+          <>
+            <h3>AMIGOS — {friends.length}</h3>
+
+            {friends.map((friend) => (
+              <div
+                className="member"
+                key={friend.friendship_id}
+                onClick={() => openDm(friend.user)}
+                style={{
+                  cursor: "pointer",
+                }}
+              >
+                <div className="member-avatar online">
+                  {friend.user.avatar_url ? (
+                    <img
+                      src={friend.user.avatar_url}
+                      alt=""
+                      className="member-profile-image"
+                    />
+                  ) : (
+                    friend.user.name
+                      .charAt(0)
+                      .toUpperCase()
+                  )}
+                </div>
+
+                <span>{friend.user.name}</span>
+              </div>
+            ))}
+          </>
         )}
       </aside>
 
-      {/* CONVIDAR PESSOAS */}
+      {/* ===================================================
+          MODAL CONVITE
+      =================================================== */}
 
-      {showInviteModal &&
-        currentServer && (
+      {showInviteModal && currentServer && (
         <div
           className="modal-overlay"
-          onMouseDown={
-            closeInviteModal
-          }
+          onMouseDown={closeInviteModal}
         >
           <div
             className="modal-card"
-            onMouseDown={(
-              event
-            ) =>
-              event.stopPropagation()
-            }
+            onMouseDown={(event) => event.stopPropagation()}
           >
             <div className="modal-header">
               <div>
-                <h2>
-                  Convidar pessoas
-                </h2>
+                <h2>Convidar pessoas</h2>
 
                 <p>
                   Crie um link de convite para{" "}
-                  {
-                    currentServer.name
-                  }.
+                  {currentServer.name}.
                 </p>
               </div>
 
               <button
                 className="modal-close"
-                onClick={
-                  closeInviteModal
-                }
+                onClick={closeInviteModal}
               >
                 ×
               </button>
             </div>
 
             <div className="modal-body">
-              <div
-                style={{
-                  padding:
-                    "14px",
+              <p style={{ color: "#747c8d" }}>
+                O link de convite é válido por 24 horas.
+              </p>
 
-                  border:
-                    "1px solid #292e3d",
+              {inviteLink && (
+                <div className="friend-add-row">
+                  <input
+                    readOnly
+                    value={inviteLink}
+                  />
 
-                  borderRadius:
-                    "14px",
-
-                  background:
-                    "#0e1118",
-
-                  marginBottom:
-                    "18px",
-
-                  color:
-                    "#8e95a5",
-
-                  fontSize:
-                    "12px",
-
-                  lineHeight:
-                    1.55,
-                }}
-              >
-                🔗 O link é válido por{" "}
-                <strong
-                  style={{
-                    color:
-                      "#fff",
-                  }}
-                >
-                  24 horas
-                </strong>
-                . Quem abrir poderá entrar no servidor depois de fazer login ou criar uma conta.
-              </div>
-
-              {inviteLink ? (
-                <>
-                  <label>
-                    LINK DE CONVITE
-                  </label>
-
-                  <div className="friend-add-row">
-                    <input
-                      type="text"
-                      readOnly
-                      value={
-                        inviteLink
-                      }
-                    />
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        void copyInviteLink()
-                      }
-                    >
-                      {inviteCopied
-                        ? "Copiado!"
-                        : "Copiar"}
-                    </button>
-                  </div>
-
-                  <p
-                    style={{
-                      marginTop:
-                        "10px",
-
-                      color:
-                        "#747c8d",
-
-                      fontSize:
-                        "11px",
-                    }}
+                  <button
+                    onClick={() => void copyInviteLink()}
                   >
-                    Envie esse link para a pessoa que você quer adicionar.
-                  </p>
-                </>
-              ) : (
-                <p
-                  style={{
-                    color:
-                      "#747c8d",
-
-                    fontSize:
-                      "12px",
-                  }}
-                >
-                  Clique em{" "}
-                  <strong
-                    style={{
-                      color:
-                        "#fff",
-                    }}
-                  >
-                    Gerar link
-                  </strong>{" "}
-                  para criar um novo convite.
-                </p>
+                    {inviteCopied ? "Copiado!" : "Copiar"}
+                  </button>
+                </div>
               )}
 
               {inviteError && (
                 <p className="modal-error">
-                  {
-                    inviteError
-                  }
+                  {inviteError}
                 </p>
               )}
             </div>
@@ -4936,26 +3761,20 @@ function App() {
             <div className="modal-footer">
               <button
                 className="modal-cancel"
-                onClick={
-                  closeInviteModal
-                }
+                onClick={closeInviteModal}
               >
                 Fechar
               </button>
 
               <button
                 className="modal-create"
-                onClick={() =>
-                  void createInviteLink()
-                }
-                disabled={
-                  inviteLoading
-                }
+                onClick={() => void createInviteLink()}
+                disabled={inviteLoading}
               >
                 {inviteLoading
                   ? "Gerando..."
                   : inviteLink
-                    ? "Gerar outro link"
+                    ? "Gerar outro"
                     : "Gerar link"}
               </button>
             </div>
@@ -4963,74 +3782,49 @@ function App() {
         </div>
       )}
 
-      {/* CRIAR SERVIDOR */}
+      {/* ===================================================
+          CRIAR SERVIDOR
+      =================================================== */}
 
       {showCreateServer && (
         <div
           className="modal-overlay"
-          onMouseDown={
-            closeCreateServer
-          }
+          onMouseDown={closeCreateServer}
         >
           <div
             className="modal-card"
-            onMouseDown={(
-              event
-            ) =>
-              event.stopPropagation()
-            }
+            onMouseDown={(event) => event.stopPropagation()}
           >
             <div className="modal-header">
               <div>
-                <h2>
-                  Criar servidor
-                </h2>
-
-                <p>
-                  Crie uma nova comunidade.
-                </p>
+                <h2>Criar servidor</h2>
+                <p>Crie uma nova comunidade.</p>
               </div>
 
               <button
                 className="modal-close"
-                onClick={
-                  closeCreateServer
-                }
+                onClick={closeCreateServer}
               >
                 ×
               </button>
             </div>
 
             <div className="modal-body">
-              <label>
-                NOME DO SERVIDOR
-              </label>
+              <label>NOME DO SERVIDOR</label>
 
               <div className="channel-name-input">
                 <input
-                  value={
-                    newServerName
-                  }
-                  onChange={(
-                    event
-                  ) => {
-                    setNewServerName(
-                      event.target
-                        .value
-                    );
-
-                    setServerError(
-                      ""
-                    );
+                  value={newServerName}
+                  onChange={(event) => {
+                    setNewServerName(event.target.value);
+                    setServerError("");
                   }}
                 />
               </div>
 
               {serverError && (
                 <p className="modal-error">
-                  {
-                    serverError
-                  }
+                  {serverError}
                 </p>
               )}
             </div>
@@ -5038,18 +3832,14 @@ function App() {
             <div className="modal-footer">
               <button
                 className="modal-cancel"
-                onClick={
-                  closeCreateServer
-                }
+                onClick={closeCreateServer}
               >
                 Cancelar
               </button>
 
               <button
                 className="modal-create"
-                onClick={() =>
-                  void createServer()
-                }
+                onClick={() => void createServer()}
               >
                 Criar
               </button>
@@ -5058,40 +3848,29 @@ function App() {
         </div>
       )}
 
-      {/* CONFIGURAÇÕES */}
+      {/* ===================================================
+          CONFIGURAÇÕES SERVIDOR
+      =================================================== */}
 
-      {showEditServer &&
-        currentServer && (
+      {showEditServer && currentServer && (
         <div
           className="modal-overlay"
-          onMouseDown={
-            closeEditServer
-          }
+          onMouseDown={closeEditServer}
         >
           <div
             className="modal-card"
-            onMouseDown={(
-              event
-            ) =>
-              event.stopPropagation()
-            }
+            onMouseDown={(event) => event.stopPropagation()}
           >
             <div className="modal-header">
               <div>
-                <h2>
-                  Configurações
-                </h2>
+                <h2>Configurações</h2>
 
-                <p>
-                  Gerencie o servidor.
-                </p>
+                <p>Gerencie o servidor.</p>
               </div>
 
               <button
                 className="modal-close"
-                onClick={
-                  closeEditServer
-                }
+                onClick={closeEditServer}
               >
                 ×
               </button>
@@ -5102,29 +3881,21 @@ function App() {
                 <div className="server-icon-preview">
                   {currentServer.icon_url ? (
                     <img
-                      src={
-                        currentServer.icon_url
-                      }
+                      src={currentServer.icon_url}
                       alt=""
                     />
                   ) : (
-                    createShortName(
-                      currentServer.name
-                    )
+                    createShortName(currentServer.name)
                   )}
                 </div>
 
                 <div className="server-icon-options">
-                  <strong>
-                    Imagem do servidor
-                  </strong>
+                  <strong>Imagem do servidor</strong>
 
                   <div className="server-image-buttons">
                     <button
                       className="server-upload-button"
-                      onClick={
-                        selectServerImage
-                      }
+                      onClick={selectServerImage}
                     >
                       Escolher imagem
                     </button>
@@ -5143,73 +3914,41 @@ function App() {
                 </div>
               </div>
 
-              <label>
-                NOME DO SERVIDOR
-              </label>
+              <label>NOME DO SERVIDOR</label>
 
               <div className="channel-name-input">
                 <input
-                  value={
-                    editingServerName
-                  }
-                  onChange={(
-                    event
-                  ) =>
-                    setEditingServerName(
-                      event.target
-                        .value
-                    )
+                  value={editingServerName}
+                  onChange={(event) =>
+                    setEditingServerName(event.target.value)
                   }
                 />
               </div>
 
               {editServerError && (
                 <p className="modal-error">
-                  {
-                    editServerError
-                  }
+                  {editServerError}
                 </p>
               )}
 
-              <div
-                style={{
-                  marginTop:
-                    "24px",
-                }}
-              >
-                <label>
-                  ADICIONAR MEMBRO PELO E-MAIL
-                </label>
+              <div style={{ marginTop: "24px" }}>
+                <label>ADICIONAR MEMBRO PELO E-MAIL</label>
 
                 <div className="friend-add-row">
                   <input
                     type="email"
                     placeholder="email@exemplo.com"
-                    value={
-                      inviteEmail
-                    }
-                    onChange={(
-                      event
-                    ) => {
-                      setInviteEmail(
-                        event.target
-                          .value
-                      );
+                    value={inviteEmail}
+                    onChange={(event) => {
+                      setInviteEmail(event.target.value);
 
-                      setInviteMemberError(
-                        ""
-                      );
-
-                      setInviteMemberSuccess(
-                        ""
-                      );
+                      setInviteMemberError("");
+                      setInviteMemberSuccess("");
                     }}
                   />
 
                   <button
-                    onClick={() =>
-                      void inviteMember()
-                    }
+                    onClick={() => void inviteMember()}
                   >
                     Adicionar
                   </button>
@@ -5217,37 +3956,25 @@ function App() {
 
                 {inviteMemberError && (
                   <p className="modal-error">
-                    {
-                      inviteMemberError
-                    }
+                    {inviteMemberError}
                   </p>
                 )}
 
                 {inviteMemberSuccess && (
                   <p
                     style={{
-                      color:
-                        "#72e6a0",
-
-                      fontSize:
-                        "12px",
-
-                      marginTop:
-                        "8px",
+                      color: "#72e6a0",
+                      fontSize: "12px",
                     }}
                   >
-                    {
-                      inviteMemberSuccess
-                    }
+                    {inviteMemberSuccess}
                   </p>
                 )}
               </div>
 
               <div className="danger-zone">
                 <div>
-                  <strong>
-                    Excluir servidor
-                  </strong>
+                  <strong>Excluir servidor</strong>
 
                   <span>
                     Canais e mensagens serão apagados.
@@ -5255,9 +3982,7 @@ function App() {
                 </div>
 
                 <button
-                  onClick={() =>
-                    void deleteServer()
-                  }
+                  onClick={() => void deleteServer()}
                 >
                   Excluir
                 </button>
@@ -5267,18 +3992,14 @@ function App() {
             <div className="modal-footer">
               <button
                 className="modal-cancel"
-                onClick={
-                  closeEditServer
-                }
+                onClick={closeEditServer}
               >
                 Cancelar
               </button>
 
               <button
                 className="modal-create"
-                onClick={() =>
-                  void saveEditedServer()
-                }
+                onClick={() => void saveEditedServer()}
               >
                 Salvar
               </button>
@@ -5287,78 +4008,51 @@ function App() {
         </div>
       )}
 
-      {/* CRIAR CANAL */}
+      {/* ===================================================
+          CRIAR CANAL
+      =================================================== */}
 
       {showCreateChannel && (
         <div
           className="modal-overlay"
-          onMouseDown={
-            closeCreateChannel
-          }
+          onMouseDown={closeCreateChannel}
         >
           <div
             className="modal-card"
-            onMouseDown={(
-              event
-            ) =>
-              event.stopPropagation()
-            }
+            onMouseDown={(event) => event.stopPropagation()}
           >
             <div className="modal-header">
               <div>
-                <h2>
-                  Criar canal
-                </h2>
-
-                <p>
-                  Crie um canal de texto.
-                </p>
+                <h2>Criar canal</h2>
+                <p>Crie um canal de texto.</p>
               </div>
 
               <button
                 className="modal-close"
-                onClick={
-                  closeCreateChannel
-                }
+                onClick={closeCreateChannel}
               >
                 ×
               </button>
             </div>
 
             <div className="modal-body">
-              <label>
-                NOME DO CANAL
-              </label>
+              <label>NOME DO CANAL</label>
 
               <div className="channel-name-input">
-                <span>
-                  #
-                </span>
+                <span>#</span>
 
                 <input
-                  value={
-                    newChannelName
-                  }
-                  onChange={(
-                    event
-                  ) => {
-                    setNewChannelName(
-                      event.target
-                        .value
-                    );
-
-                    setChannelError(
-                      ""
-                    );
+                  value={newChannelName}
+                  onChange={(event) => {
+                    setNewChannelName(event.target.value);
+                    setChannelError("");
                   }}
                 />
               </div>
 
               {channelError && (
                 <p className="modal-error">
-                  {
-                    channelError
-                  }
+                  {channelError}
                 </p>
               )}
             </div>
@@ -5366,18 +4060,14 @@ function App() {
             <div className="modal-footer">
               <button
                 className="modal-cancel"
-                onClick={
-                  closeCreateChannel
-                }
+                onClick={closeCreateChannel}
               >
                 Cancelar
               </button>
 
               <button
                 className="modal-create"
-                onClick={() =>
-                  void createChannel()
-                }
+                onClick={() => void createChannel()}
               >
                 Criar
               </button>
@@ -5386,78 +4076,52 @@ function App() {
         </div>
       )}
 
-      {/* EDITAR CANAL */}
+      {/* ===================================================
+          EDITAR CANAL
+      =================================================== */}
 
       {showEditChannel && (
         <div
           className="modal-overlay"
-          onMouseDown={
-            closeEditChannel
-          }
+          onMouseDown={closeEditChannel}
         >
           <div
             className="modal-card"
-            onMouseDown={(
-              event
-            ) =>
-              event.stopPropagation()
-            }
+            onMouseDown={(event) => event.stopPropagation()}
           >
             <div className="modal-header">
               <div>
-                <h2>
-                  Editar canal
-                </h2>
-
-                <p>
-                  Altere o nome do canal.
-                </p>
+                <h2>Editar canal</h2>
+                <p>Altere o nome do canal.</p>
               </div>
 
               <button
                 className="modal-close"
-                onClick={
-                  closeEditChannel
-                }
+                onClick={closeEditChannel}
               >
                 ×
               </button>
             </div>
 
             <div className="modal-body">
-              <label>
-                NOME DO CANAL
-              </label>
+              <label>NOME DO CANAL</label>
 
               <div className="channel-name-input">
-                <span>
-                  #
-                </span>
+                <span>#</span>
 
                 <input
-                  value={
-                    editingChannelName
-                  }
-                  onChange={(
-                    event
-                  ) => {
-                    setEditingChannelName(
-                      event.target
-                        .value
-                    );
+                  value={editingChannelName}
+                  onChange={(event) => {
+                    setEditingChannelName(event.target.value);
 
-                    setEditChannelError(
-                      ""
-                    );
+                    setEditChannelError("");
                   }}
                 />
               </div>
 
               {editChannelError && (
                 <p className="modal-error">
-                  {
-                    editChannelError
-                  }
+                  {editChannelError}
                 </p>
               )}
             </div>
@@ -5465,9 +4129,7 @@ function App() {
             <div className="modal-footer">
               <button
                 className="modal-cancel"
-                onClick={
-                  closeEditChannel
-                }
+                onClick={closeEditChannel}
               >
                 Cancelar
               </button>
@@ -5485,39 +4147,28 @@ function App() {
         </div>
       )}
 
-      {/* PERFIL */}
+      {/* ===================================================
+          PERFIL
+      =================================================== */}
 
       {showProfile && (
         <div
           className="modal-overlay"
-          onMouseDown={
-            closeProfile
-          }
+          onMouseDown={closeProfile}
         >
           <div
             className="modal-card profile-modal"
-            onMouseDown={(
-              event
-            ) =>
-              event.stopPropagation()
-            }
+            onMouseDown={(event) => event.stopPropagation()}
           >
             <div className="modal-header">
               <div>
-                <h2>
-                  Meu perfil
-                </h2>
-
-                <p>
-                  Perfil salvo no Supabase.
-                </p>
+                <h2>Meu perfil</h2>
+                <p>Perfil salvo no Supabase.</p>
               </div>
 
               <button
                 className="modal-close"
-                onClick={
-                  closeProfile
-                }
+                onClick={closeProfile}
               >
                 ×
               </button>
@@ -5528,9 +4179,7 @@ function App() {
                 <div className="profile-big-avatar">
                   {currentUser.avatar_url ? (
                     <img
-                      src={
-                        currentUser.avatar_url
-                      }
+                      src={currentUser.avatar_url}
                       alt=""
                     />
                   ) : (
@@ -5541,19 +4190,13 @@ function App() {
                 </div>
 
                 <div className="profile-photo-options">
-                  <strong>
-                    Foto de perfil
-                  </strong>
+                  <strong>Foto de perfil</strong>
 
                   <div className="profile-photo-buttons">
                     <button
                       className="server-upload-button"
-                      onClick={
-                        selectProfileImage
-                      }
-                      disabled={
-                        profileImageLoading
-                      }
+                      onClick={selectProfileImage}
+                      disabled={profileImageLoading}
                     >
                       {profileImageLoading
                         ? "Processando..."
@@ -5574,22 +4217,13 @@ function App() {
                 </div>
               </div>
 
-              <label>
-                NOME
-              </label>
+              <label>NOME</label>
 
               <div className="channel-name-input">
                 <input
-                  value={
-                    profileName
-                  }
-                  onChange={(
-                    event
-                  ) =>
-                    setProfileName(
-                      event.target
-                        .value
-                    )
+                  value={profileName}
+                  onChange={(event) =>
+                    setProfileName(event.target.value)
                   }
                 />
               </div>
@@ -5600,62 +4234,39 @@ function App() {
 
               <div className="channel-name-input">
                 <input
-                  value={
-                    profileStatus
-                  }
-                  maxLength={
-                    40
-                  }
-                  onChange={(
-                    event
-                  ) =>
-                    setProfileStatus(
-                      event.target
-                        .value
-                    )
+                  value={profileStatus}
+                  maxLength={40}
+                  onChange={(event) =>
+                    setProfileStatus(event.target.value)
                   }
                 />
               </div>
 
               {profileError && (
                 <p className="modal-error">
-                  {
-                    profileError
-                  }
+                  {profileError}
                 </p>
               )}
 
               <div className="profile-email-box">
-                <span>
-                  E-MAIL
-                </span>
+                <span>E-MAIL</span>
 
-                <strong>
-                  {
-                    currentUser.email
-                  }
-                </strong>
+                <strong>{currentUser.email}</strong>
               </div>
             </div>
 
             <div className="modal-footer">
               <button
                 className="modal-cancel"
-                onClick={
-                  closeProfile
-                }
+                onClick={closeProfile}
               >
                 Cancelar
               </button>
 
               <button
                 className="modal-create"
-                disabled={
-                  profileSaving
-                }
-                onClick={() =>
-                  void saveProfile()
-                }
+                disabled={profileSaving}
+                onClick={() => void saveProfile()}
               >
                 {profileSaving
                   ? "Salvando..."
