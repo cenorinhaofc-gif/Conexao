@@ -1,25 +1,15 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-} from "react";
-
+import { useEffect, useRef, useState } from "react";
 import type {
   ChangeEvent,
   FormEvent,
   KeyboardEvent,
 } from "react";
-
 import type {
   User as SupabaseUser,
 } from "@supabase/supabase-js";
 
 import "./App.css";
 import { supabase } from "./lib/supabase";
-
-/* =========================================================
-   TIPOS
-========================================================= */
 
 type Profile = {
   id: string;
@@ -67,10 +57,6 @@ type Member = {
   role: string;
 };
 
-/* =========================================================
-   FUNÇÕES AUXILIARES
-========================================================= */
-
 function createShortName(name: string) {
   const words = name
     .trim()
@@ -94,429 +80,623 @@ function normalizeChannelName(name: string) {
     .replace(/[^a-z0-9-_]/g, "");
 }
 
-/* =========================================================
-   COMPRIMIR IMAGEM
-========================================================= */
+function isRecoveryUrl() {
+  const hash =
+    window.location.hash.toLowerCase();
+
+  const search =
+    window.location.search.toLowerCase();
+
+  return (
+    hash.includes("type=recovery") ||
+    search.includes("type=recovery")
+  );
+}
+
+function getInitialInviteCode() {
+  const code =
+    new URLSearchParams(
+      window.location.search
+    )
+      .get("invite")
+      ?.trim();
+
+  if (code) {
+    localStorage.setItem(
+      "conexao_pending_invite",
+      code
+    );
+
+    return code;
+  }
+
+  return (
+    localStorage.getItem(
+      "conexao_pending_invite"
+    ) || ""
+  );
+}
+
+function removeInviteFromUrl() {
+  const url =
+    new URL(window.location.href);
+
+  url.searchParams.delete("invite");
+
+  window.history.replaceState(
+    {},
+    document.title,
+    `${url.pathname}${url.search}${url.hash}`
+  );
+}
 
 function compressImage(
   file: File,
   maxSize = 512,
   quality = 0.8
 ): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
+  return new Promise(
+    (resolve, reject) => {
+      const reader =
+        new FileReader();
 
-    reader.onload = () => {
-      const image = new Image();
+      reader.onload = () => {
+        const image =
+          new Image();
 
-      image.onload = () => {
-        let width = image.width;
-        let height = image.height;
+        image.onload = () => {
+          let width =
+            image.width;
 
-        if (width > maxSize || height > maxSize) {
-          if (width > height) {
-            height = Math.round(
-              (height * maxSize) / width
-            );
+          let height =
+            image.height;
 
-            width = maxSize;
-          } else {
-            width = Math.round(
-              (width * maxSize) / height
-            );
+          if (
+            width > maxSize ||
+            height > maxSize
+          ) {
+            if (width > height) {
+              height =
+                Math.round(
+                  (height *
+                    maxSize) /
+                    width
+                );
 
-            height = maxSize;
+              width =
+                maxSize;
+            } else {
+              width =
+                Math.round(
+                  (width *
+                    maxSize) /
+                    height
+                );
+
+              height =
+                maxSize;
+            }
           }
-        }
 
-        const canvas =
-          document.createElement("canvas");
+          const canvas =
+            document.createElement(
+              "canvas"
+            );
 
-        canvas.width = width;
-        canvas.height = height;
+          canvas.width =
+            width;
 
-        const context =
-          canvas.getContext("2d");
+          canvas.height =
+            height;
 
-        if (!context) {
-          reject(
-            new Error(
-              "Não foi possível processar a imagem."
-            )
+          const context =
+            canvas.getContext(
+              "2d"
+            );
+
+          if (!context) {
+            reject(
+              new Error(
+                "Não foi possível processar a imagem."
+              )
+            );
+
+            return;
+          }
+
+          context.imageSmoothingEnabled =
+            true;
+
+          context.imageSmoothingQuality =
+            "high";
+
+          context.drawImage(
+            image,
+            0,
+            0,
+            width,
+            height
           );
 
-          return;
-        }
+          resolve(
+            canvas.toDataURL(
+              "image/webp",
+              quality
+            )
+          );
+        };
 
-        context.imageSmoothingEnabled = true;
-        context.imageSmoothingQuality = "high";
+        image.onerror =
+          () => {
+            reject(
+              new Error(
+                "Não foi possível abrir a imagem."
+              )
+            );
+          };
 
-        context.drawImage(
-          image,
-          0,
-          0,
-          width,
-          height
-        );
-
-        resolve(
-          canvas.toDataURL(
-            "image/webp",
-            quality
-          )
-        );
+        image.src =
+          reader.result as string;
       };
 
-      image.onerror = () => {
-        reject(
-          new Error(
-            "Não foi possível abrir a imagem."
-          )
-        );
-      };
+      reader.onerror =
+        () => {
+          reject(
+            new Error(
+              "Não foi possível ler a imagem."
+            )
+          );
+        };
 
-      image.src = reader.result as string;
-    };
-
-    reader.onerror = () => {
-      reject(
-        new Error(
-          "Não foi possível ler a imagem."
-        )
+      reader.readAsDataURL(
+        file
       );
-    };
-
-    reader.readAsDataURL(file);
-  });
+    }
+  );
 }
-
-/* =========================================================
-   APP
-========================================================= */
 
 function App() {
   const profileFileInputRef =
-    useRef<HTMLInputElement>(null);
+    useRef<HTMLInputElement>(
+      null
+    );
 
   const serverFileInputRef =
-    useRef<HTMLInputElement>(null);
+    useRef<HTMLInputElement>(
+      null
+    );
 
-  /* =======================================================
+  const inviteProcessingRef =
+    useRef(false);
+
+  /* =========================================
      AUTENTICAÇÃO
-  ======================================================= */
+  ========================================= */
 
   const [
     authUser,
     setAuthUser,
-  ] = useState<SupabaseUser | null>(null);
+  ] =
+    useState<SupabaseUser | null>(
+      null
+    );
 
   const [
     currentUser,
     setCurrentUser,
-  ] = useState<Profile | null>(null);
+  ] =
+    useState<Profile | null>(
+      null
+    );
 
   const [
     authChecking,
     setAuthChecking,
-  ] = useState(true);
+  ] =
+    useState(true);
 
   const [
     authLoading,
     setAuthLoading,
-  ] = useState(false);
+  ] =
+    useState(false);
 
   const [
     authMode,
     setAuthMode,
-  ] = useState<"login" | "register">(
-    "login"
-  );
+  ] =
+    useState<
+      "login" | "register"
+    >("login");
 
   const [
     authName,
     setAuthName,
-  ] = useState("");
+  ] =
+    useState("");
 
   const [
     authEmail,
     setAuthEmail,
-  ] = useState("");
+  ] =
+    useState("");
 
   const [
     authPassword,
     setAuthPassword,
-  ] = useState("");
+  ] =
+    useState("");
 
   const [
     authConfirmPassword,
     setAuthConfirmPassword,
-  ] = useState("");
+  ] =
+    useState("");
 
   const [
     authError,
     setAuthError,
-  ] = useState("");
+  ] =
+    useState("");
 
   const [
     authSuccess,
     setAuthSuccess,
-  ] = useState("");
+  ] =
+    useState("");
 
   const [
     lastSignupEmail,
     setLastSignupEmail,
-  ] = useState("");
+  ] =
+    useState("");
 
   const [
     resendLoading,
     setResendLoading,
-  ] = useState(false);
+  ] =
+    useState(false);
 
-  /* =======================================================
-     RECUPERAÇÃO DE SENHA
-  ======================================================= */
+  /* =========================================
+     REDEFINIÇÃO DE SENHA
+  ========================================= */
 
   const [
     showForgotPassword,
     setShowForgotPassword,
-  ] = useState(false);
+  ] =
+    useState(false);
 
   const [
     recoveryEmail,
     setRecoveryEmail,
-  ] = useState("");
+  ] =
+    useState("");
 
   const [
     recoveryLoading,
     setRecoveryLoading,
-  ] = useState(false);
+  ] =
+    useState(false);
 
   const [
     recoveryError,
     setRecoveryError,
-  ] = useState("");
+  ] =
+    useState("");
 
   const [
     recoverySuccess,
     setRecoverySuccess,
-  ] = useState("");
+  ] =
+    useState("");
 
   const [
     passwordRecoveryMode,
     setPasswordRecoveryMode,
-  ] = useState(() => {
-    const hash =
-      window.location.hash.toLowerCase();
-
-    const search =
-      window.location.search.toLowerCase();
-
-    return (
-      hash.includes("type=recovery") ||
-      search.includes("type=recovery")
+  ] =
+    useState(() =>
+      isRecoveryUrl()
     );
-  });
 
   const [
     newPassword,
     setNewPassword,
-  ] = useState("");
+  ] =
+    useState("");
 
   const [
     confirmNewPassword,
     setConfirmNewPassword,
-  ] = useState("");
+  ] =
+    useState("");
 
   const [
     newPasswordLoading,
     setNewPasswordLoading,
-  ] = useState(false);
+  ] =
+    useState(false);
 
   const [
     newPasswordError,
     setNewPasswordError,
-  ] = useState("");
+  ] =
+    useState("");
 
-  /* =======================================================
-     DADOS DO APP
-  ======================================================= */
-
-  const [
-    appLoading,
-    setAppLoading,
-  ] = useState(false);
+  /* =========================================
+     CONVITES
+  ========================================= */
 
   const [
-    servers,
-    setServers,
-  ] = useState<Server[]>([]);
+    pendingInviteCode,
+    setPendingInviteCode,
+  ] =
+    useState(
+      getInitialInviteCode
+    );
 
   const [
-    currentServerId,
-    setCurrentServerId,
-  ] = useState<string | null>(null);
+    joinInviteLoading,
+    setJoinInviteLoading,
+  ] =
+    useState(false);
 
   const [
-    channels,
-    setChannels,
-  ] = useState<Channel[]>([]);
+    joinInviteError,
+    setJoinInviteError,
+  ] =
+    useState("");
 
   const [
-    currentChannelId,
-    setCurrentChannelId,
-  ] = useState<string | null>(null);
+    joinInviteSuccess,
+    setJoinInviteSuccess,
+  ] =
+    useState("");
 
   const [
-    messages,
-    setMessages,
-  ] = useState<ChatMessage[]>([]);
+    showInviteModal,
+    setShowInviteModal,
+  ] =
+    useState(false);
 
   const [
-    members,
-    setMembers,
-  ] = useState<Member[]>([]);
+    inviteLink,
+    setInviteLink,
+  ] =
+    useState("");
 
   const [
-    message,
-    setMessage,
-  ] = useState("");
-
-  /* =======================================================
-     PERFIL
-  ======================================================= */
-
-  const [
-    showProfile,
-    setShowProfile,
-  ] = useState(false);
-
-  const [
-    profileName,
-    setProfileName,
-  ] = useState("");
-
-  const [
-    profileStatus,
-    setProfileStatus,
-  ] = useState("");
-
-  const [
-    profileError,
-    setProfileError,
-  ] = useState("");
-
-  const [
-    profileSaving,
-    setProfileSaving,
-  ] = useState(false);
-
-  const [
-    profileImageLoading,
-    setProfileImageLoading,
-  ] = useState(false);
-
-  /* =======================================================
-     SERVIDOR
-  ======================================================= */
-
-  const [
-    showCreateServer,
-    setShowCreateServer,
-  ] = useState(false);
-
-  const [
-    newServerName,
-    setNewServerName,
-  ] = useState("");
-
-  const [
-    serverError,
-    setServerError,
-  ] = useState("");
-
-  const [
-    showEditServer,
-    setShowEditServer,
-  ] = useState(false);
-
-  const [
-    editingServerName,
-    setEditingServerName,
-  ] = useState("");
-
-  const [
-    editServerError,
-    setEditServerError,
-  ] = useState("");
-
-  const [
-    inviteEmail,
-    setInviteEmail,
-  ] = useState("");
+    inviteLoading,
+    setInviteLoading,
+  ] =
+    useState(false);
 
   const [
     inviteError,
     setInviteError,
-  ] = useState("");
+  ] =
+    useState("");
 
   const [
-    inviteSuccess,
-    setInviteSuccess,
-  ] = useState("");
+    inviteCopied,
+    setInviteCopied,
+  ] =
+    useState(false);
 
-  /* =======================================================
+  /* =========================================
+     APP
+  ========================================= */
+
+  const [
+    appLoading,
+    setAppLoading,
+  ] =
+    useState(false);
+
+  const [
+    servers,
+    setServers,
+  ] =
+    useState<Server[]>([]);
+
+  const [
+    currentServerId,
+    setCurrentServerId,
+  ] =
+    useState<
+      string | null
+    >(null);
+
+  const [
+    channels,
+    setChannels,
+  ] =
+    useState<Channel[]>([]);
+
+  const [
+    currentChannelId,
+    setCurrentChannelId,
+  ] =
+    useState<
+      string | null
+    >(null);
+
+  const [
+    messages,
+    setMessages,
+  ] =
+    useState<
+      ChatMessage[]
+    >([]);
+
+  const [
+    members,
+    setMembers,
+  ] =
+    useState<Member[]>([]);
+
+  const [
+    message,
+    setMessage,
+  ] =
+    useState("");
+
+  /* =========================================
+     PERFIL
+  ========================================= */
+
+  const [
+    showProfile,
+    setShowProfile,
+  ] =
+    useState(false);
+
+  const [
+    profileName,
+    setProfileName,
+  ] =
+    useState("");
+
+  const [
+    profileStatus,
+    setProfileStatus,
+  ] =
+    useState("");
+
+  const [
+    profileError,
+    setProfileError,
+  ] =
+    useState("");
+
+  const [
+    profileSaving,
+    setProfileSaving,
+  ] =
+    useState(false);
+
+  const [
+    profileImageLoading,
+    setProfileImageLoading,
+  ] =
+    useState(false);
+
+  /* =========================================
+     SERVIDOR
+  ========================================= */
+
+  const [
+    showCreateServer,
+    setShowCreateServer,
+  ] =
+    useState(false);
+
+  const [
+    newServerName,
+    setNewServerName,
+  ] =
+    useState("");
+
+  const [
+    serverError,
+    setServerError,
+  ] =
+    useState("");
+
+  const [
+    showEditServer,
+    setShowEditServer,
+  ] =
+    useState(false);
+
+  const [
+    editingServerName,
+    setEditingServerName,
+  ] =
+    useState("");
+
+  const [
+    editServerError,
+    setEditServerError,
+  ] =
+    useState("");
+
+  const [
+    inviteEmail,
+    setInviteEmail,
+  ] =
+    useState("");
+
+  const [
+    inviteMemberError,
+    setInviteMemberError,
+  ] =
+    useState("");
+
+  const [
+    inviteMemberSuccess,
+    setInviteMemberSuccess,
+  ] =
+    useState("");
+
+  /* =========================================
      CANAIS
-  ======================================================= */
+  ========================================= */
 
   const [
     showCreateChannel,
     setShowCreateChannel,
-  ] = useState(false);
+  ] =
+    useState(false);
 
   const [
     newChannelName,
     setNewChannelName,
-  ] = useState("");
+  ] =
+    useState("");
 
   const [
     channelError,
     setChannelError,
-  ] = useState("");
+  ] =
+    useState("");
 
   const [
     showEditChannel,
     setShowEditChannel,
-  ] = useState(false);
+  ] =
+    useState(false);
 
   const [
     editingChannelId,
     setEditingChannelId,
-  ] = useState("");
+  ] =
+    useState("");
 
   const [
     editingChannelName,
     setEditingChannelName,
-  ] = useState("");
+  ] =
+    useState("");
 
   const [
     editChannelError,
     setEditChannelError,
-  ] = useState("");
-
-  /* =======================================================
-     DADOS ATUAIS
-  ======================================================= */
+  ] =
+    useState("");
 
   const currentServer =
     servers.find(
       (server) =>
-        server.id === currentServerId
+        server.id ===
+        currentServerId
     ) || null;
 
   const currentChannel =
     channels.find(
       (channel) =>
-        channel.id === currentChannelId
+        channel.id ===
+        currentChannelId
     ) || null;
 
   const isServerOwner =
@@ -525,9 +705,9 @@ function App() {
     currentServer.owner_id ===
       currentUser.id;
 
-  /* =======================================================
-     CARREGAR PERFIL
-  ======================================================= */
+  /* =========================================
+     PERFIL DO USUÁRIO
+  ========================================= */
 
   async function loadProfile(
     user: SupabaseUser
@@ -535,13 +715,17 @@ function App() {
     const {
       data,
       error,
-    } = await supabase
-      .from("profiles")
-      .select(
-        "id,name,email,avatar_url,status"
-      )
-      .eq("id", user.id)
-      .single();
+    } =
+      await supabase
+        .from("profiles")
+        .select(
+          "id,name,email,avatar_url,status"
+        )
+        .eq(
+          "id",
+          user.id
+        )
+        .single();
 
     if (error) {
       console.error(
@@ -549,7 +733,10 @@ function App() {
         error
       );
 
-      setCurrentUser(null);
+      setCurrentUser(
+        null
+      );
+
       return;
     }
 
@@ -558,12 +745,13 @@ function App() {
     );
   }
 
-  /* =======================================================
-     VERIFICAR SESSÃO / RECUPERAÇÃO
-  ======================================================= */
+  /* =========================================
+     SESSÃO
+  ========================================= */
 
   useEffect(() => {
-    let mounted = true;
+    let mounted =
+      true;
 
     async function startAuth() {
       const {
@@ -577,38 +765,57 @@ function App() {
       }
 
       if (error) {
-        console.error(error);
+        console.error(
+          error
+        );
 
-        setAuthChecking(false);
+        setAuthChecking(
+          false
+        );
+
         return;
       }
 
       const user =
-        data.session?.user || null;
+        data.session
+          ?.user ||
+        null;
 
-      setAuthUser(user);
+      setAuthUser(
+        user
+      );
 
       if (
         user &&
-        !passwordRecoveryMode
+        !isRecoveryUrl()
       ) {
-        await loadProfile(user);
+        await loadProfile(
+          user
+        );
       }
 
       if (mounted) {
-        setAuthChecking(false);
+        setAuthChecking(
+          false
+        );
       }
     }
 
-    startAuth();
+    void startAuth();
 
     const {
-      data: { subscription },
+      data: {
+        subscription,
+      },
     } =
       supabase.auth.onAuthStateChange(
-        (event, session) => {
+        (
+          event,
+          session
+        ) => {
           const user =
-            session?.user || null;
+            session?.user ||
+            null;
 
           if (
             event ===
@@ -618,48 +825,69 @@ function App() {
               true
             );
 
-            setAuthUser(user);
-            setCurrentUser(null);
+            setAuthUser(
+              user
+            );
+
+            setCurrentUser(
+              null
+            );
 
             setShowForgotPassword(
               false
             );
 
-            setNewPassword("");
-            setConfirmNewPassword("");
-            setNewPasswordError("");
+            setNewPassword(
+              ""
+            );
 
-            setAuthChecking(false);
+            setConfirmNewPassword(
+              ""
+            );
+
+            setNewPasswordError(
+              ""
+            );
+
+            setAuthChecking(
+              false
+            );
 
             return;
           }
 
-          setAuthUser(user);
+          setAuthUser(
+            user
+          );
 
           if (
             user &&
-            !passwordRecoveryMode
+            !isRecoveryUrl()
           ) {
-            void loadProfile(user);
+            void loadProfile(
+              user
+            );
           }
 
           if (!user) {
-            setCurrentUser(null);
+            setCurrentUser(
+              null
+            );
           }
 
-          setAuthChecking(false);
+          setAuthChecking(
+            false
+          );
         }
       );
 
     return () => {
-      mounted = false;
+      mounted =
+        false;
+
       subscription.unsubscribe();
     };
   }, []);
-
-  /* =======================================================
-     LOGIN
-  ======================================================= */
 
   function clearAuthMessages() {
     setAuthError("");
@@ -667,20 +895,38 @@ function App() {
   }
 
   function changeAuthMode(
-    mode: "login" | "register"
+    mode:
+      | "login"
+      | "register"
   ) {
-    setAuthMode(mode);
+    setAuthMode(
+      mode
+    );
 
-    setAuthError("");
-    setAuthSuccess("");
+    setAuthError(
+      ""
+    );
 
-    setAuthPassword("");
-    setAuthConfirmPassword("");
+    setAuthSuccess(
+      ""
+    );
+
+    setAuthPassword(
+      ""
+    );
+
+    setAuthConfirmPassword(
+      ""
+    );
 
     setShowForgotPassword(
       false
     );
   }
+
+  /* =========================================
+     CADASTRO
+  ========================================= */
 
   async function handleRegister(
     event: FormEvent
@@ -707,7 +953,9 @@ function App() {
 
     if (
       !email ||
-      !email.includes("@")
+      !email.includes(
+        "@"
+      )
     ) {
       setAuthError(
         "Digite um e-mail válido."
@@ -717,7 +965,8 @@ function App() {
     }
 
     if (
-      authPassword.length < 6
+      authPassword.length <
+      6
     ) {
       setAuthError(
         "A senha precisa ter pelo menos 6 caracteres."
@@ -737,30 +986,50 @@ function App() {
       return;
     }
 
-    setAuthLoading(true);
+    setAuthLoading(
+      true
+    );
+
+    const redirectUrl =
+      pendingInviteCode
+        ? `${
+            window
+              .location
+              .origin
+          }/?invite=${encodeURIComponent(
+            pendingInviteCode
+          )}`
+        : window
+            .location
+            .origin;
 
     const {
       data,
       error,
     } =
-      await supabase.auth.signUp({
-        email,
+      await supabase.auth.signUp(
+        {
+          email,
 
-        password:
-          authPassword,
+          password:
+            authPassword,
 
-        options: {
-          data: {
-            name,
-            status: "Online",
+          options: {
+            data: {
+              name,
+              status:
+                "Online",
+            },
+
+            emailRedirectTo:
+              redirectUrl,
           },
+        }
+      );
 
-          emailRedirectTo:
-            window.location.origin,
-        },
-      });
-
-    setAuthLoading(false);
+    setAuthLoading(
+      false
+    );
 
     if (error) {
       setAuthError(
@@ -783,9 +1052,17 @@ function App() {
         "login"
       );
 
-      setAuthName("");
-      setAuthPassword("");
-      setAuthConfirmPassword("");
+      setAuthName(
+        ""
+      );
+
+      setAuthPassword(
+        ""
+      );
+
+      setAuthConfirmPassword(
+        ""
+      );
 
       return;
     }
@@ -800,6 +1077,10 @@ function App() {
       );
     }
   }
+
+  /* =========================================
+     LOGIN
+  ========================================= */
 
   async function handleLogin(
     event: FormEvent
@@ -829,19 +1110,26 @@ function App() {
       return;
     }
 
-    setAuthLoading(true);
+    setAuthLoading(
+      true
+    );
 
     const {
       data,
       error,
     } =
-      await supabase.auth.signInWithPassword({
-        email,
-        password:
-          authPassword,
-      });
+      await supabase.auth.signInWithPassword(
+        {
+          email,
 
-    setAuthLoading(false);
+          password:
+            authPassword,
+        }
+      );
+
+    setAuthLoading(
+      false
+    );
 
     if (error) {
       const text =
@@ -892,11 +1180,19 @@ function App() {
       );
     }
 
-    setAuthPassword("");
+    setAuthPassword(
+      ""
+    );
   }
 
+  /* =========================================
+     REENVIAR CONFIRMAÇÃO
+  ========================================= */
+
   async function resendConfirmation() {
-    if (!lastSignupEmail) {
+    if (
+      !lastSignupEmail
+    ) {
       setAuthError(
         "Digite o e-mail da conta."
       );
@@ -910,18 +1206,36 @@ function App() {
 
     clearAuthMessages();
 
-    const { error } =
-      await supabase.auth.resend({
-        type: "signup",
+    const redirectUrl =
+      pendingInviteCode
+        ? `${
+            window
+              .location
+              .origin
+          }/?invite=${encodeURIComponent(
+            pendingInviteCode
+          )}`
+        : window
+            .location
+            .origin;
 
-        email:
-          lastSignupEmail,
+    const {
+      error,
+    } =
+      await supabase.auth.resend(
+        {
+          type:
+            "signup",
 
-        options: {
-          emailRedirectTo:
-            window.location.origin,
-        },
-      });
+          email:
+            lastSignupEmail,
+
+          options: {
+            emailRedirectTo:
+              redirectUrl,
+          },
+        }
+      );
 
     setResendLoading(
       false
@@ -940,17 +1254,22 @@ function App() {
     );
   }
 
-  /* =======================================================
-     ESQUECI MINHA SENHA
-  ======================================================= */
+  /* =========================================
+     ESQUECI A SENHA
+  ========================================= */
 
   function openForgotPassword() {
     setRecoveryEmail(
       authEmail.trim()
     );
 
-    setRecoveryError("");
-    setRecoverySuccess("");
+    setRecoveryError(
+      ""
+    );
+
+    setRecoverySuccess(
+      ""
+    );
 
     setShowForgotPassword(
       true
@@ -962,8 +1281,13 @@ function App() {
       false
     );
 
-    setRecoveryError("");
-    setRecoverySuccess("");
+    setRecoveryError(
+      ""
+    );
+
+    setRecoverySuccess(
+      ""
+    );
   }
 
   async function handleForgotPassword(
@@ -976,12 +1300,19 @@ function App() {
         .trim()
         .toLowerCase();
 
-    setRecoveryError("");
-    setRecoverySuccess("");
+    setRecoveryError(
+      ""
+    );
+
+    setRecoverySuccess(
+      ""
+    );
 
     if (
       !email ||
-      !email.includes("@")
+      !email.includes(
+        "@"
+      )
     ) {
       setRecoveryError(
         "Digite um e-mail válido."
@@ -994,15 +1325,18 @@ function App() {
       true
     );
 
-    const { error } =
-      await supabase.auth
-        .resetPasswordForEmail(
-          email,
-          {
-            redirectTo:
-              window.location.origin,
-          }
-        );
+    const {
+      error,
+    } =
+      await supabase.auth.resetPasswordForEmail(
+        email,
+        {
+          redirectTo:
+            window
+              .location
+              .origin,
+        }
+      );
 
     setRecoveryLoading(
       false
@@ -1021,19 +1355,18 @@ function App() {
     );
   }
 
-  /* =======================================================
-     DEFINIR NOVA SENHA
-  ======================================================= */
-
   async function handleNewPassword(
     event: FormEvent
   ) {
     event.preventDefault();
 
-    setNewPasswordError("");
+    setNewPasswordError(
+      ""
+    );
 
     if (
-      newPassword.length < 6
+      newPassword.length <
+      6
     ) {
       setNewPasswordError(
         "A nova senha precisa ter pelo menos 6 caracteres."
@@ -1060,10 +1393,12 @@ function App() {
     const {
       error,
     } =
-      await supabase.auth.updateUser({
-        password:
-          newPassword,
-      });
+      await supabase.auth.updateUser(
+        {
+          password:
+            newPassword,
+        }
+      );
 
     if (error) {
       setNewPasswordLoading(
@@ -1087,17 +1422,29 @@ function App() {
       false
     );
 
-    setCurrentUser(null);
-    setAuthUser(null);
+    setCurrentUser(
+      null
+    );
 
-    setNewPassword("");
-    setConfirmNewPassword("");
+    setAuthUser(
+      null
+    );
+
+    setNewPassword(
+      ""
+    );
+
+    setConfirmNewPassword(
+      ""
+    );
 
     setAuthMode(
       "login"
     );
 
-    setAuthPassword("");
+    setAuthPassword(
+      ""
+    );
 
     setAuthSuccess(
       "Senha alterada com sucesso. Agora entre usando sua nova senha."
@@ -1113,13 +1460,29 @@ function App() {
   async function logout() {
     await supabase.auth.signOut();
 
-    setAuthUser(null);
-    setCurrentUser(null);
+    setAuthUser(
+      null
+    );
 
-    setServers([]);
-    setChannels([]);
-    setMessages([]);
-    setMembers([]);
+    setCurrentUser(
+      null
+    );
+
+    setServers(
+      []
+    );
+
+    setChannels(
+      []
+    );
+
+    setMessages(
+      []
+    );
+
+    setMembers(
+      []
+    );
 
     setCurrentServerId(
       null
@@ -1130,30 +1493,35 @@ function App() {
     );
   }
 
-  /* =======================================================
+  /* =========================================
      SERVIDORES
-  ======================================================= */
+  ========================================= */
 
   async function loadServers() {
     if (!currentUser) {
       return;
     }
 
-    setAppLoading(true);
+    setAppLoading(
+      true
+    );
 
     const {
       data,
       error,
     } =
       await supabase
-        .from("servers")
+        .from(
+          "servers"
+        )
         .select(
           "id,owner_id,name,icon_url,created_at"
         )
         .order(
           "created_at",
           {
-            ascending: true,
+            ascending:
+              true,
           }
         );
 
@@ -1163,12 +1531,16 @@ function App() {
         error
       );
 
-      setAppLoading(false);
+      setAppLoading(
+        false
+      );
+
       return;
     }
 
     const list =
-      (data || []) as Server[];
+      (data ||
+        []) as Server[];
 
     if (
       list.length === 0
@@ -1181,15 +1553,23 @@ function App() {
           createServerError,
       } =
         await supabase
-          .from("servers")
+          .from(
+            "servers"
+          )
           .insert({
-            id: serverId,
+            id:
+              serverId,
+
             owner_id:
               currentUser.id,
-            name: "CONEXÃO",
+
+            name:
+              "CONEXÃO",
           });
 
-      if (createServerError) {
+      if (
+        createServerError
+      ) {
         console.error(
           createServerError
         );
@@ -1206,7 +1586,9 @@ function App() {
           createChannelError,
       } =
         await supabase
-          .from("channels")
+          .from(
+            "channels"
+          )
           .insert({
             id:
               crypto.randomUUID(),
@@ -1214,7 +1596,8 @@ function App() {
             server_id:
               serverId,
 
-            name: "geral",
+            name:
+              "geral",
 
             description:
               "Converse com a comunidade",
@@ -1233,7 +1616,9 @@ function App() {
           newServerData,
       } =
         await supabase
-          .from("servers")
+          .from(
+            "servers"
+          )
           .select(
             "id,owner_id,name,icon_url,created_at"
           )
@@ -1243,7 +1628,9 @@ function App() {
           )
           .single();
 
-      if (newServerData) {
+      if (
+        newServerData
+      ) {
         setServers([
           newServerData as Server,
         ]);
@@ -1265,11 +1652,15 @@ function App() {
     );
 
     setCurrentServerId(
-      (previous) => {
+      (
+        previous
+      ) => {
         if (
           previous &&
           list.some(
-            (server) =>
+            (
+              server
+            ) =>
               server.id ===
               previous
           )
@@ -1278,7 +1669,8 @@ function App() {
         }
 
         return (
-          list[0]?.id ||
+          list[0]
+            ?.id ||
           null
         );
       }
@@ -1289,13 +1681,130 @@ function App() {
     );
   }
 
+  /* =========================================
+     ENTRAR POR CONVITE
+  ========================================= */
+
+  async function processPendingInvite(
+    code: string
+  ) {
+    if (
+      !currentUser ||
+      !code ||
+      inviteProcessingRef.current
+    ) {
+      return;
+    }
+
+    inviteProcessingRef.current =
+      true;
+
+    setJoinInviteLoading(
+      true
+    );
+
+    setJoinInviteError(
+      ""
+    );
+
+    setJoinInviteSuccess(
+      ""
+    );
+
+    const {
+      data,
+      error,
+    } =
+      await supabase.rpc(
+        "join_server_by_invite",
+        {
+          p_code:
+            code,
+        }
+      );
+
+    localStorage.removeItem(
+      "conexao_pending_invite"
+    );
+
+    setPendingInviteCode(
+      ""
+    );
+
+    removeInviteFromUrl();
+
+    if (error) {
+      setJoinInviteError(
+        error.message
+      );
+
+      setJoinInviteLoading(
+        false
+      );
+
+      inviteProcessingRef.current =
+        false;
+
+      await loadServers();
+
+      return;
+    }
+
+    await loadServers();
+
+    if (
+      typeof data ===
+        "string"
+    ) {
+      setCurrentServerId(
+        data
+      );
+
+      setCurrentChannelId(
+        null
+      );
+
+      setChannels(
+        []
+      );
+
+      setMessages(
+        []
+      );
+    }
+
+    setJoinInviteSuccess(
+      "Convite aceito. Você entrou no servidor!"
+    );
+
+    setJoinInviteLoading(
+      false
+    );
+
+    inviteProcessingRef.current =
+      false;
+  }
+
   useEffect(() => {
     if (!currentUser) {
       return;
     }
 
+    if (
+      pendingInviteCode
+    ) {
+      void processPendingInvite(
+        pendingInviteCode
+      );
+
+      return;
+    }
+
     void loadServers();
-  }, [currentUser?.id]);
+  }, [
+    currentUser?.id,
+    pendingInviteCode,
+  ]);
 
   function openCreateServer() {
     setNewServerName(
@@ -1348,11 +1857,16 @@ function App() {
       error,
     } =
       await supabase
-        .from("servers")
+        .from(
+          "servers"
+        )
         .insert({
-          id: serverId,
+          id:
+            serverId,
+
           owner_id:
             currentUser.id,
+
           name,
         });
 
@@ -1369,7 +1883,9 @@ function App() {
         channelCreateError,
     } =
       await supabase
-        .from("channels")
+        .from(
+          "channels"
+        )
         .insert({
           id:
             crypto.randomUUID(),
@@ -1377,7 +1893,8 @@ function App() {
           server_id:
             serverId,
 
-          name: "geral",
+          name:
+            "geral",
 
           description:
             "Converse com a comunidade",
@@ -1411,8 +1928,13 @@ function App() {
       null
     );
 
-    setChannels([]);
-    setMessages([]);
+    setChannels(
+      []
+    );
+
+    setMessages(
+      []
+    );
   }
 
   function openEditServer() {
@@ -1432,11 +1954,11 @@ function App() {
       ""
     );
 
-    setInviteError(
+    setInviteMemberError(
       ""
     );
 
-    setInviteSuccess(
+    setInviteMemberSuccess(
       ""
     );
 
@@ -1454,11 +1976,11 @@ function App() {
       ""
     );
 
-    setInviteError(
+    setInviteMemberError(
       ""
     );
 
-    setInviteSuccess(
+    setInviteMemberSuccess(
       ""
     );
   }
@@ -1486,7 +2008,9 @@ function App() {
       error,
     } =
       await supabase
-        .from("servers")
+        .from(
+          "servers"
+        )
         .update({
           name,
         })
@@ -1529,7 +2053,9 @@ function App() {
       error,
     } =
       await supabase
-        .from("servers")
+        .from(
+          "servers"
+        )
         .delete()
         .eq(
           "id",
@@ -1557,9 +2083,187 @@ function App() {
     await loadServers();
   }
 
-  /* =======================================================
+  /* =========================================
+     CRIAR LINK DE CONVITE
+  ========================================= */
+
+  function openInviteModal() {
+    setInviteLink(
+      ""
+    );
+
+    setInviteError(
+      ""
+    );
+
+    setInviteCopied(
+      false
+    );
+
+    setShowInviteModal(
+      true
+    );
+  }
+
+  function closeInviteModal() {
+    setShowInviteModal(
+      false
+    );
+
+    setInviteLink(
+      ""
+    );
+
+    setInviteError(
+      ""
+    );
+
+    setInviteCopied(
+      false
+    );
+  }
+
+  async function createInviteLink() {
+    if (
+      !currentServer ||
+      !isServerOwner
+    ) {
+      return;
+    }
+
+    setInviteLoading(
+      true
+    );
+
+    setInviteError(
+      ""
+    );
+
+    setInviteCopied(
+      false
+    );
+
+    const {
+      data,
+      error,
+    } =
+      await supabase.rpc(
+        "create_server_invite",
+        {
+          p_server_id:
+            currentServer.id,
+
+          p_expires_hours:
+            24,
+        }
+      );
+
+    setInviteLoading(
+      false
+    );
+
+    if (error) {
+      setInviteError(
+        error.message
+      );
+
+      return;
+    }
+
+    if (
+      typeof data !==
+        "string" ||
+      !data
+    ) {
+      setInviteError(
+        "Não foi possível criar o convite."
+      );
+
+      return;
+    }
+
+    const baseUrl =
+      window.location
+        .hostname ===
+        "localhost" ||
+      window.location
+        .hostname ===
+        "127.0.0.1"
+        ? "https://conexao-jagr.vercel.app"
+        : window
+            .location
+            .origin;
+
+    const url =
+      new URL(
+        baseUrl
+      );
+
+    url.searchParams.set(
+      "invite",
+      data
+    );
+
+    setInviteLink(
+      url.toString()
+    );
+  }
+
+  async function copyInviteLink() {
+    if (!inviteLink) {
+      return;
+    }
+
+    try {
+      if (
+        navigator.clipboard &&
+        window.isSecureContext
+      ) {
+        await navigator.clipboard.writeText(
+          inviteLink
+        );
+      } else {
+        const textarea =
+          document.createElement(
+            "textarea"
+          );
+
+        textarea.value =
+          inviteLink;
+
+        textarea.style.position =
+          "fixed";
+
+        textarea.style.opacity =
+          "0";
+
+        document.body.appendChild(
+          textarea
+        );
+
+        textarea.focus();
+        textarea.select();
+
+        document.execCommand(
+          "copy"
+        );
+
+        textarea.remove();
+      }
+
+      setInviteCopied(
+        true
+      );
+    } catch {
+      setInviteError(
+        "Não foi possível copiar o link."
+      );
+    }
+  }
+
+  /* =========================================
      IMAGEM SERVIDOR
-  ======================================================= */
+  ========================================= */
 
   function selectServerImage() {
     serverFileInputRef
@@ -1579,7 +2283,8 @@ function App() {
     }
 
     const file =
-      event.target.files?.[0];
+      event.target
+        .files?.[0];
 
     if (!file) {
       return;
@@ -1599,7 +2304,9 @@ function App() {
 
     if (
       file.size >
-      10 * 1024 * 1024
+      10 *
+        1024 *
+        1024
     ) {
       alert(
         "A imagem deve ter menos de 10 MB."
@@ -1620,7 +2327,9 @@ function App() {
         error,
       } =
         await supabase
-          .from("servers")
+          .from(
+            "servers"
+          )
           .update({
             icon_url:
               icon,
@@ -1658,9 +2367,12 @@ function App() {
     }
 
     await supabase
-      .from("servers")
+      .from(
+        "servers"
+      )
       .update({
-        icon_url: null,
+        icon_url:
+          null,
       })
       .eq(
         "id",
@@ -1670,9 +2382,9 @@ function App() {
     await loadServers();
   }
 
-  /* =======================================================
+  /* =========================================
      MEMBROS
-  ======================================================= */
+  ========================================= */
 
   async function loadMembers(
     serverId: string
@@ -1706,14 +2418,20 @@ function App() {
 
     const ids =
       rows.map(
-        (row) =>
+        (
+          row
+        ) =>
           row.user_id
       );
 
     if (
-      ids.length === 0
+      ids.length ===
+      0
     ) {
-      setMembers([]);
+      setMembers(
+        []
+      );
+
       return;
     }
 
@@ -1724,7 +2442,9 @@ function App() {
         profilesError,
     } =
       await supabase
-        .from("profiles")
+        .from(
+          "profiles"
+        )
         .select(
           "id,name,email,avatar_url,status"
         )
@@ -1747,26 +2467,36 @@ function App() {
       (profileData ||
         []) as Profile[];
 
-    const result: Member[] =
+    const result:
+      Member[] =
       rows
-        .map((row) => {
-          const profile =
-            profiles.find(
-              (item) =>
-                item.id ===
-                row.user_id
-            );
+        .map(
+          (
+            row
+          ) => {
+            const profile =
+              profiles.find(
+                (
+                  item
+                ) =>
+                  item.id ===
+                  row.user_id
+              );
 
-          if (!profile) {
-            return null;
+            if (
+              !profile
+            ) {
+              return null;
+            }
+
+            return {
+              ...profile,
+
+              role:
+                row.role,
+            };
           }
-
-          return {
-            ...profile,
-            role:
-              row.role,
-          };
-        })
+        )
         .filter(
           (
             item
@@ -1792,16 +2522,16 @@ function App() {
         .trim()
         .toLowerCase();
 
-    setInviteError(
+    setInviteMemberError(
       ""
     );
 
-    setInviteSuccess(
+    setInviteMemberSuccess(
       ""
     );
 
     if (!email) {
-      setInviteError(
+      setInviteMemberError(
         "Digite o e-mail do usuário."
       );
 
@@ -1815,7 +2545,9 @@ function App() {
         profileError,
     } =
       await supabase
-        .from("profiles")
+        .from(
+          "profiles"
+        )
         .select(
           "id,name,email"
         )
@@ -1828,7 +2560,7 @@ function App() {
     if (
       profileError
     ) {
-      setInviteError(
+      setInviteMemberError(
         profileError.message
       );
 
@@ -1836,7 +2568,7 @@ function App() {
     }
 
     if (!profile) {
-      setInviteError(
+      setInviteMemberError(
         "Esse usuário ainda não possui conta no CONEXÃO."
       );
 
@@ -1847,7 +2579,7 @@ function App() {
       profile.id ===
       currentUser?.id
     ) {
-      setInviteError(
+      setInviteMemberError(
         "Você já está no servidor."
       );
 
@@ -1877,11 +2609,11 @@ function App() {
         error.code ===
         "23505"
       ) {
-        setInviteError(
+        setInviteMemberError(
           "Esse usuário já está no servidor."
         );
       } else {
-        setInviteError(
+        setInviteMemberError(
           error.message
         );
       }
@@ -1893,7 +2625,7 @@ function App() {
       ""
     );
 
-    setInviteSuccess(
+    setInviteMemberSuccess(
       `${profile.name} entrou no servidor.`
     );
 
@@ -1902,9 +2634,9 @@ function App() {
     );
   }
 
-  /* =======================================================
+  /* =========================================
      CANAIS
-  ======================================================= */
+  ========================================= */
 
   async function loadChannels(
     serverId: string
@@ -1914,7 +2646,9 @@ function App() {
       error,
     } =
       await supabase
-        .from("channels")
+        .from(
+          "channels"
+        )
         .select(
           "id,server_id,name,description,created_at"
         )
@@ -1925,7 +2659,8 @@ function App() {
         .order(
           "created_at",
           {
-            ascending: true,
+            ascending:
+              true,
           }
         );
 
@@ -1947,11 +2682,15 @@ function App() {
     );
 
     setCurrentChannelId(
-      (previous) => {
+      (
+        previous
+      ) => {
         if (
           previous &&
           list.some(
-            (channel) =>
+            (
+              channel
+            ) =>
               channel.id ===
               previous
           )
@@ -1960,7 +2699,8 @@ function App() {
         }
 
         return (
-          list[0]?.id ||
+          list[0]
+            ?.id ||
           null
         );
       }
@@ -1968,9 +2708,17 @@ function App() {
   }
 
   useEffect(() => {
-    if (!currentServerId) {
-      setChannels([]);
-      setMembers([]);
+    if (
+      !currentServerId
+    ) {
+      setChannels(
+        []
+      );
+
+      setMembers(
+        []
+      );
+
       return;
     }
 
@@ -1981,7 +2729,9 @@ function App() {
     void loadMembers(
       currentServerId
     );
-  }, [currentServerId]);
+  }, [
+    currentServerId,
+  ]);
 
   function openCreateChannel() {
     setNewChannelName(
@@ -2035,7 +2785,9 @@ function App() {
       error,
     } =
       await supabase
-        .from("channels")
+        .from(
+          "channels"
+        )
         .insert({
           id:
             channelId,
@@ -2152,7 +2904,9 @@ function App() {
       error,
     } =
       await supabase
-        .from("channels")
+        .from(
+          "channels"
+        )
         .update({
           name,
 
@@ -2213,7 +2967,9 @@ function App() {
       error,
     } =
       await supabase
-        .from("channels")
+        .from(
+          "channels"
+        )
         .delete()
         .eq(
           "id",
@@ -2242,9 +2998,9 @@ function App() {
     );
   }
 
-  /* =======================================================
+  /* =========================================
      MENSAGENS
-  ======================================================= */
+  ========================================= */
 
   async function fetchMessages(
     channelId: string
@@ -2254,7 +3010,9 @@ function App() {
       error,
     } =
       await supabase
-        .from("messages")
+        .from(
+          "messages"
+        )
         .select(
           "id,channel_id,user_id,content,created_at"
         )
@@ -2265,7 +3023,8 @@ function App() {
         .order(
           "created_at",
           {
-            ascending: true,
+            ascending:
+              true,
           }
         );
 
@@ -2283,9 +3042,13 @@ function App() {
         []) as DatabaseMessage[];
 
     if (
-      rows.length === 0
+      rows.length ===
+      0
     ) {
-      setMessages([]);
+      setMessages(
+        []
+      );
+
       return;
     }
 
@@ -2293,7 +3056,9 @@ function App() {
       Array.from(
         new Set(
           rows.map(
-            (row) =>
+            (
+              row
+            ) =>
               row.user_id
           )
         )
@@ -2304,7 +3069,9 @@ function App() {
         profilesData,
     } =
       await supabase
-        .from("profiles")
+        .from(
+          "profiles"
+        )
         .select(
           "id,name,avatar_url"
         )
@@ -2317,7 +3084,9 @@ function App() {
       new Map<
         string,
         {
-          name: string;
+          name:
+            string;
+
           avatar_url:
             string | null;
         }
@@ -2325,7 +3094,8 @@ function App() {
 
     for (
       const profile of
-        profilesData || []
+      profilesData ||
+      []
     ) {
       profileMap.set(
         profile.id,
@@ -2339,38 +3109,44 @@ function App() {
       );
     }
 
-    const finalMessages: ChatMessage[] =
-      rows.map((row) => {
-        const profile =
-          profileMap.get(
-            row.user_id
-          );
+    const finalMessages:
+      ChatMessage[] =
+      rows.map(
+        (
+          row
+        ) => {
+          const profile =
+            profileMap.get(
+              row.user_id
+            );
 
-        return {
-          ...row,
+          return {
+            ...row,
 
-          author:
-            profile?.name ||
-            "Usuário",
+            author:
+              profile?.name ||
+              "Usuário",
 
-          avatar_url:
-            profile?.avatar_url ||
-            null,
-        };
-      });
+            avatar_url:
+              profile?.avatar_url ||
+              null,
+          };
+        }
+      );
 
     setMessages(
       finalMessages
     );
   }
 
-  /* =======================================================
-     REALTIME
-  ======================================================= */
-
   useEffect(() => {
-    if (!currentChannelId) {
-      setMessages([]);
+    if (
+      !currentChannelId
+    ) {
+      setMessages(
+        []
+      );
+
       return;
     }
 
@@ -2386,9 +3162,11 @@ function App() {
         .on(
           "postgres_changes",
           {
-            event: "INSERT",
+            event:
+              "INSERT",
 
-            schema: "public",
+            schema:
+              "public",
 
             table:
               "messages",
@@ -2410,7 +3188,9 @@ function App() {
         realtimeChannel
       );
     };
-  }, [currentChannelId]);
+  }, [
+    currentChannelId,
+  ]);
 
   async function sendMessage() {
     if (
@@ -2431,7 +3211,9 @@ function App() {
       error,
     } =
       await supabase
-        .from("messages")
+        .from(
+          "messages"
+        )
         .insert({
           id:
             crypto.randomUUID(),
@@ -2475,9 +3257,9 @@ function App() {
     }
   }
 
-  /* =======================================================
+  /* =========================================
      PERFIL
-  ======================================================= */
+  ========================================= */
 
   function openProfile() {
     if (!currentUser) {
@@ -2539,10 +3321,14 @@ function App() {
       error,
     } =
       await supabase
-        .from("profiles")
+        .from(
+          "profiles"
+        )
         .update({
           name,
+
           status,
+
           updated_at:
             new Date().toISOString(),
         })
@@ -2603,7 +3389,8 @@ function App() {
     }
 
     const file =
-      event.target.files?.[0];
+      event.target
+        .files?.[0];
 
     if (!file) {
       return;
@@ -2623,7 +3410,9 @@ function App() {
 
     if (
       file.size >
-      10 * 1024 * 1024
+      10 *
+        1024 *
+        1024
     ) {
       alert(
         "A imagem deve ter menos de 10 MB."
@@ -2648,7 +3437,9 @@ function App() {
         error,
       } =
         await supabase
-          .from("profiles")
+          .from(
+            "profiles"
+          )
           .update({
             avatar_url:
               avatar,
@@ -2710,9 +3501,12 @@ function App() {
     }
 
     await supabase
-      .from("profiles")
+      .from(
+        "profiles"
+      )
       .update({
-        avatar_url: null,
+        avatar_url:
+          null,
       })
       .eq(
         "id",
@@ -2726,9 +3520,9 @@ function App() {
     }
   }
 
-  /* =======================================================
+  /* =========================================
      CARREGANDO
-  ======================================================= */
+  ========================================= */
 
   if (authChecking) {
     return (
@@ -2748,11 +3542,13 @@ function App() {
     );
   }
 
-  /* =======================================================
+  /* =========================================
      NOVA SENHA
-  ======================================================= */
+  ========================================= */
 
-  if (passwordRecoveryMode) {
+  if (
+    passwordRecoveryMode
+  ) {
     return (
       <div className="auth-page">
         <div className="auth-glow auth-glow-one" />
@@ -2805,7 +3601,8 @@ function App() {
                   event
                 ) => {
                   setNewPassword(
-                    event.target.value
+                    event.target
+                      .value
                   );
 
                   setNewPasswordError(
@@ -2830,7 +3627,8 @@ function App() {
                   event
                 ) => {
                   setConfirmNewPassword(
-                    event.target.value
+                    event.target
+                      .value
                   );
 
                   setNewPasswordError(
@@ -2865,9 +3663,9 @@ function App() {
     );
   }
 
-  /* =======================================================
-     ESQUECI MINHA SENHA
-  ======================================================= */
+  /* =========================================
+     ESQUECI A SENHA
+  ========================================= */
 
   if (
     !currentUser &&
@@ -2926,7 +3724,8 @@ function App() {
                   event
                 ) => {
                   setRecoveryEmail(
-                    event.target.value
+                    event.target
+                      .value
                   );
 
                   setRecoveryError(
@@ -2982,7 +3781,7 @@ function App() {
           </form>
 
           <div className="auth-switch">
-            Lembrou sua senha?
+            Lembrou sua senha?{" "}
 
             <button
               type="button"
@@ -2998,9 +3797,9 @@ function App() {
     );
   }
 
-  /* =======================================================
+  /* =========================================
      LOGIN / CADASTRO
-  ======================================================= */
+  ========================================= */
 
   if (!currentUser) {
     return (
@@ -3019,8 +3818,7 @@ function App() {
             </h1>
 
             <p>
-              Converse. Crie.
-              Conecte-se.
+              Converse. Crie. Conecte-se.
             </p>
           </div>
         </div>
@@ -3041,6 +3839,39 @@ function App() {
                 : "Crie sua conta e confirme seu e-mail."}
             </p>
           </div>
+
+          {pendingInviteCode && (
+            <div
+              style={{
+                marginBottom:
+                  "16px",
+
+                padding:
+                  "12px",
+
+                border:
+                  "1px solid rgba(109,93,252,.3)",
+
+                borderRadius:
+                  "12px",
+
+                background:
+                  "rgba(109,93,252,.08)",
+
+                color:
+                  "#b9c1ff",
+
+                fontSize:
+                  "12px",
+
+                lineHeight:
+                  1.5,
+              }}
+            >
+              🔗 Você recebeu um convite para um servidor.
+              Entre ou crie sua conta para continuar.
+            </div>
+          )}
 
           <form
             onSubmit={
@@ -3067,7 +3898,8 @@ function App() {
                     event
                   ) =>
                     setAuthName(
-                      event.target.value
+                      event.target
+                        .value
                     )
                   }
                 />
@@ -3089,7 +3921,8 @@ function App() {
                   event
                 ) =>
                   setAuthEmail(
-                    event.target.value
+                    event.target
+                      .value
                   )
                 }
               />
@@ -3110,7 +3943,8 @@ function App() {
                   event
                 ) =>
                   setAuthPassword(
-                    event.target.value
+                    event.target
+                      .value
                   )
                 }
               />
@@ -3124,23 +3958,35 @@ function App() {
                   openForgotPassword
                 }
                 style={{
-                  width: "100%",
-                  border: "none",
+                  width:
+                    "100%",
+
+                  border:
+                    "none",
+
                   background:
                     "transparent",
+
                   color:
                     "#8295ff",
+
                   textAlign:
                     "right",
+
                   cursor:
                     "pointer",
+
                   fontSize:
                     "12px",
+
                   marginTop:
                     "-2px",
+
                   marginBottom:
                     "14px",
-                  padding: 0,
+
+                  padding:
+                    0,
                 }}
               >
                 Esqueceu sua senha?
@@ -3164,7 +4010,8 @@ function App() {
                     event
                   ) =>
                     setAuthConfirmPassword(
-                      event.target.value
+                      event.target
+                        .value
                     )
                   }
                 />
@@ -3225,14 +4072,21 @@ function App() {
                 resendLoading
               }
               style={{
-                width: "100%",
+                width:
+                  "100%",
+
                 marginTop:
                   "12px",
-                border: "none",
+
+                border:
+                  "none",
+
                 background:
                   "transparent",
+
                 color:
                   "#8295ff",
+
                 cursor:
                   "pointer",
               }}
@@ -3247,8 +4101,7 @@ function App() {
             {authMode ===
             "login" ? (
               <>
-                Ainda não tem
-                uma conta?
+                Ainda não tem uma conta?{" "}
 
                 <button
                   type="button"
@@ -3263,8 +4116,7 @@ function App() {
               </>
             ) : (
               <>
-                Já possui uma
-                conta?
+                Já possui uma conta?{" "}
 
                 <button
                   type="button"
@@ -3284,13 +4136,30 @@ function App() {
     );
   }
 
-  /* =======================================================
-     CARREGANDO SERVIDORES
-  ======================================================= */
+  if (
+    joinInviteLoading
+  ) {
+    return (
+      <div className="auth-page">
+        <div className="auth-card">
+          <div className="auth-card-header">
+            <h2>
+              Entrando no servidor...
+            </h2>
+
+            <p>
+              Estamos validando seu convite.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (
     appLoading &&
-    servers.length === 0
+    servers.length ===
+      0
   ) {
     return (
       <div className="auth-page">
@@ -3309,9 +4178,9 @@ function App() {
     );
   }
 
-  /* =======================================================
+  /* =========================================
      APP PRINCIPAL
-  ======================================================= */
+  ========================================= */
 
   return (
     <div className="app">
@@ -3339,13 +4208,116 @@ function App() {
         }
       />
 
+      {(joinInviteError ||
+        joinInviteSuccess) && (
+        <div
+          style={{
+            position:
+              "fixed",
+
+            top:
+              "18px",
+
+            left:
+              "50%",
+
+            transform:
+              "translateX(-50%)",
+
+            zIndex:
+              9999,
+
+            minWidth:
+              "320px",
+
+            maxWidth:
+              "520px",
+
+            padding:
+              "12px 14px",
+
+            borderRadius:
+              "12px",
+
+            border:
+              joinInviteError
+                ? "1px solid rgba(255,90,90,.35)"
+                : "1px solid rgba(70,220,130,.3)",
+
+            background:
+              joinInviteError
+                ? "rgba(70,15,20,.96)"
+                : "rgba(15,55,35,.96)",
+
+            color:
+              "#ffffff",
+
+            boxShadow:
+              "0 14px 40px rgba(0,0,0,.35)",
+
+            display:
+              "flex",
+
+            alignItems:
+              "center",
+
+            justifyContent:
+              "space-between",
+
+            gap:
+              "16px",
+
+            fontSize:
+              "13px",
+          }}
+        >
+          <span>
+            {joinInviteError ||
+              joinInviteSuccess}
+          </span>
+
+          <button
+            type="button"
+            onClick={() => {
+              setJoinInviteError(
+                ""
+              );
+
+              setJoinInviteSuccess(
+                ""
+              );
+            }}
+            style={{
+              border:
+                "none",
+
+              background:
+                "transparent",
+
+              color:
+                "#ffffff",
+
+              cursor:
+                "pointer",
+
+              fontSize:
+                "18px",
+            }}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       <aside className="servers">
         <div className="logo">
           C
         </div>
 
         {servers.map(
-          (server) => (
+          (
+            server
+          ) => (
             <button
               key={
                 server.id
@@ -3414,15 +4386,38 @@ function App() {
               </div>
 
               {isServerOwner && (
-                <button
-                  className="workspace-settings"
-                  onClick={
-                    openEditServer
-                  }
-                  title="Configurações"
+                <div
+                  style={{
+                    display:
+                      "flex",
+
+                    alignItems:
+                      "center",
+
+                    gap:
+                      "4px",
+                  }}
                 >
-                  ⚙
-                </button>
+                  <button
+                    className="workspace-settings"
+                    onClick={
+                      openInviteModal
+                    }
+                    title="Convidar pessoas"
+                  >
+                    🔗
+                  </button>
+
+                  <button
+                    className="workspace-settings"
+                    onClick={
+                      openEditServer
+                    }
+                    title="Configurações"
+                  >
+                    ⚙
+                  </button>
+                </div>
               )}
             </div>
 
@@ -3445,7 +4440,9 @@ function App() {
               </div>
 
               {channels.map(
-                (channel) => (
+                (
+                  channel
+                ) => (
                   <div
                     className="channel-row"
                     key={
@@ -3485,7 +4482,7 @@ function App() {
 
                         <button
                           onClick={() =>
-                            deleteChannel(
+                            void deleteChannel(
                               channel.id
                             )
                           }
@@ -3618,7 +4615,9 @@ function App() {
               </div>
 
               {messages.map(
-                (item) => (
+                (
+                  item
+                ) => (
                   <div
                     className="message"
                     key={
@@ -3636,7 +4635,9 @@ function App() {
                         />
                       ) : (
                         item.author
-                          .charAt(0)
+                          .charAt(
+                            0
+                          )
                           .toUpperCase()
                       )}
                     </div>
@@ -3691,7 +4692,8 @@ function App() {
                   event
                 ) =>
                   setMessage(
-                    event.target.value
+                    event.target
+                      .value
                   )
                 }
                 onKeyDown={
@@ -3734,7 +4736,9 @@ function App() {
         </h3>
 
         {members.map(
-          (member) => (
+          (
+            member
+          ) => (
             <div
               className="member"
               key={
@@ -3752,7 +4756,9 @@ function App() {
                   />
                 ) : (
                   member.name
-                    .charAt(0)
+                    .charAt(
+                      0
+                    )
                     .toUpperCase()
                 )}
               </div>
@@ -3770,6 +4776,192 @@ function App() {
           )
         )}
       </aside>
+
+      {/* CONVIDAR PESSOAS */}
+
+      {showInviteModal &&
+        currentServer && (
+        <div
+          className="modal-overlay"
+          onMouseDown={
+            closeInviteModal
+          }
+        >
+          <div
+            className="modal-card"
+            onMouseDown={(
+              event
+            ) =>
+              event.stopPropagation()
+            }
+          >
+            <div className="modal-header">
+              <div>
+                <h2>
+                  Convidar pessoas
+                </h2>
+
+                <p>
+                  Crie um link de convite para{" "}
+                  {
+                    currentServer.name
+                  }.
+                </p>
+              </div>
+
+              <button
+                className="modal-close"
+                onClick={
+                  closeInviteModal
+                }
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <div
+                style={{
+                  padding:
+                    "14px",
+
+                  border:
+                    "1px solid #292e3d",
+
+                  borderRadius:
+                    "14px",
+
+                  background:
+                    "#0e1118",
+
+                  marginBottom:
+                    "18px",
+
+                  color:
+                    "#8e95a5",
+
+                  fontSize:
+                    "12px",
+
+                  lineHeight:
+                    1.55,
+                }}
+              >
+                🔗 O link é válido por{" "}
+                <strong
+                  style={{
+                    color:
+                      "#fff",
+                  }}
+                >
+                  24 horas
+                </strong>
+                . Quem abrir poderá entrar no servidor depois de fazer login ou criar uma conta.
+              </div>
+
+              {inviteLink ? (
+                <>
+                  <label>
+                    LINK DE CONVITE
+                  </label>
+
+                  <div className="friend-add-row">
+                    <input
+                      type="text"
+                      readOnly
+                      value={
+                        inviteLink
+                      }
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void copyInviteLink()
+                      }
+                    >
+                      {inviteCopied
+                        ? "Copiado!"
+                        : "Copiar"}
+                    </button>
+                  </div>
+
+                  <p
+                    style={{
+                      marginTop:
+                        "10px",
+
+                      color:
+                        "#747c8d",
+
+                      fontSize:
+                        "11px",
+                    }}
+                  >
+                    Envie esse link para a pessoa que você quer adicionar.
+                  </p>
+                </>
+              ) : (
+                <p
+                  style={{
+                    color:
+                      "#747c8d",
+
+                    fontSize:
+                      "12px",
+                  }}
+                >
+                  Clique em{" "}
+                  <strong
+                    style={{
+                      color:
+                        "#fff",
+                    }}
+                  >
+                    Gerar link
+                  </strong>{" "}
+                  para criar um novo convite.
+                </p>
+              )}
+
+              {inviteError && (
+                <p className="modal-error">
+                  {
+                    inviteError
+                  }
+                </p>
+              )}
+            </div>
+
+            <div className="modal-footer">
+              <button
+                className="modal-cancel"
+                onClick={
+                  closeInviteModal
+                }
+              >
+                Fechar
+              </button>
+
+              <button
+                className="modal-create"
+                onClick={() =>
+                  void createInviteLink()
+                }
+                disabled={
+                  inviteLoading
+                }
+              >
+                {inviteLoading
+                  ? "Gerando..."
+                  : inviteLink
+                    ? "Gerar outro link"
+                    : "Gerar link"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* CRIAR SERVIDOR */}
 
@@ -3823,7 +5015,8 @@ function App() {
                     event
                   ) => {
                     setNewServerName(
-                      event.target.value
+                      event.target
+                        .value
                     );
 
                     setServerError(
@@ -3865,7 +5058,7 @@ function App() {
         </div>
       )}
 
-      {/* CONFIGURAÇÕES DO SERVIDOR */}
+      {/* CONFIGURAÇÕES */}
 
       {showEditServer &&
         currentServer && (
@@ -3963,7 +5156,8 @@ function App() {
                     event
                   ) =>
                     setEditingServerName(
-                      event.target.value
+                      event.target
+                        .value
                     )
                   }
                 />
@@ -3984,7 +5178,7 @@ function App() {
                 }}
               >
                 <label>
-                  ADICIONAR MEMBRO
+                  ADICIONAR MEMBRO PELO E-MAIL
                 </label>
 
                 <div className="friend-add-row">
@@ -3998,14 +5192,15 @@ function App() {
                       event
                     ) => {
                       setInviteEmail(
-                        event.target.value
+                        event.target
+                          .value
                       );
 
-                      setInviteError(
+                      setInviteMemberError(
                         ""
                       );
 
-                      setInviteSuccess(
+                      setInviteMemberSuccess(
                         ""
                       );
                     }}
@@ -4020,15 +5215,15 @@ function App() {
                   </button>
                 </div>
 
-                {inviteError && (
+                {inviteMemberError && (
                   <p className="modal-error">
                     {
-                      inviteError
+                      inviteMemberError
                     }
                   </p>
                 )}
 
-                {inviteSuccess && (
+                {inviteMemberSuccess && (
                   <p
                     style={{
                       color:
@@ -4042,7 +5237,7 @@ function App() {
                     }}
                   >
                     {
-                      inviteSuccess
+                      inviteMemberSuccess
                     }
                   </p>
                 )}
@@ -4148,7 +5343,8 @@ function App() {
                     event
                   ) => {
                     setNewChannelName(
-                      event.target.value
+                      event.target
+                        .value
                     );
 
                     setChannelError(
@@ -4246,7 +5442,8 @@ function App() {
                     event
                   ) => {
                     setEditingChannelName(
-                      event.target.value
+                      event.target
+                        .value
                     );
 
                     setEditChannelError(
@@ -4390,7 +5587,8 @@ function App() {
                     event
                   ) =>
                     setProfileName(
-                      event.target.value
+                      event.target
+                        .value
                     )
                   }
                 />
@@ -4405,12 +5603,15 @@ function App() {
                   value={
                     profileStatus
                   }
-                  maxLength={40}
+                  maxLength={
+                    40
+                  }
                   onChange={(
                     event
                   ) =>
                     setProfileStatus(
-                      event.target.value
+                      event.target
+                        .value
                     )
                   }
                 />
